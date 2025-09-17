@@ -1,46 +1,111 @@
 "use client";
-import React from "react";
-import DashboardLayout from "../../components/DashboardLayout";
-import { Button, Card, Input, Segmented, Space, Table, Tag } from "antd";
 
-interface FileRow {
-    key: string;
-    name: string;
-    source: string;
-    status: "processing" | "ready" | "failed";
-    updatedAt: string;
-}
-
-const data: FileRow[] = [{ key: "1", name: "Product Doc.pdf", source: "Upload", status: "ready", updatedAt: "2025-09-13" }];
+import { SidebarLayout } from "@/components/dashboard/sidebar-layout";
+import { KnowledgeSources } from "@/components/knowledge/knowledge-sources";
+import { useState } from "react";
 
 export default function KnowledgePage() {
+    const websites = [
+        {
+            id: 1,
+            url: "https://docs.example.com/api",
+            title: "API Documentation",
+            status: "ready" as const,
+            addedAt: "2024-01-15",
+        },
+        {
+            id: 2,
+            url: "https://blog.example.com/updates",
+            title: "Product Updates",
+            status: "processing" as const,
+            addedAt: "2024-01-16",
+        },
+        {
+            id: 3,
+            url: "https://github.com/company/repo",
+            title: "GitHub Repository",
+            status: "failed" as const,
+            addedAt: "2024-01-17",
+        },
+    ];
+
+    const [files, setFiles] = useState([
+        {
+            id: 1,
+            name: "Q4_Report.pdf",
+            type: "PDF",
+            size: "2.4 MB",
+            status: "ready" as const,
+            tags: ["financial", "quarterly", "reports"],
+            uploadedAt: "2024-01-15",
+        },
+        {
+            id: 2,
+            name: "Product_Specs.docx",
+            type: "DOCX",
+            size: "1.8 MB",
+            status: "processing" as const,
+            tags: ["product", "specifications"],
+            uploadedAt: "2024-01-16",
+        },
+        {
+            id: 3,
+            name: "Market_Analysis.xlsx",
+            type: "XLSX",
+            size: "3.2 MB",
+            status: "failed" as const,
+            tags: ["market", "analysis"],
+            uploadedAt: "2024-01-17",
+        },
+    ]);
+
+    const integrations = [
+        {
+            name: "Google Drive",
+            description: "Access and sync files from your Google Drive",
+            status: "connected" as const,
+            files: 24,
+            icon: "📁",
+        },
+        {
+            name: "Slack",
+            description: "Import messages and files from Slack channels",
+            status: "available" as const,
+            files: 0,
+            icon: "💬",
+        },
+        {
+            name: "Notion",
+            description: "Sync pages and databases from Notion workspace",
+            status: "connected" as const,
+            files: 12,
+            icon: "📝",
+        },
+        {
+            name: "Confluence",
+            description: "Import documentation from Confluence spaces",
+            status: "available" as const,
+            files: 0,
+            icon: "🏢",
+        },
+    ];
+
+    const handleUpdateFileTags = (fileId: number, newTags: string[]) => {
+        setFiles((prevFiles) => prevFiles.map((file) => (file.id === fileId ? { ...file, tags: newTags } : file)));
+    };
+
     return (
-        <DashboardLayout sidebarContent={null}>
-            <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                <Card>
-                    <Space wrap>
-                        <Input.Search placeholder="Search files" style={{ width: 260 }} />
-                        <Segmented options={["All", "Upload", "URL", "Integration"]} />
-                        <Segmented options={["Any", "ready", "processing", "failed"]} />
-                        <Button type="primary">Upload</Button>
-                    </Space>
-                </Card>
-                <Table
-                    dataSource={data}
-                    columns={[
-                        { title: "Name", dataIndex: "name" },
-                        { title: "Source", dataIndex: "source" },
-                        {
-                            title: "Status",
-                            dataIndex: "status",
-                            render: (s: FileRow["status"]) => (
-                                <Tag color={s === "ready" ? "green" : s === "processing" ? "gold" : "red"}>{s}</Tag>
-                            ),
-                        },
-                        { title: "Updated", dataIndex: "updatedAt", sorter: true },
-                    ]}
-                />
-            </Space>
-        </DashboardLayout>
+        <SidebarLayout>
+            <div className="p-6 space-y-6">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-3xl font-bold">Knowledge Sources</h1>
+                        <p className="text-muted-foreground">Manage your files, websites, and integrations</p>
+                    </div>
+                </div>
+
+                <KnowledgeSources websites={websites} files={files} integrations={integrations} onUpdateFileTags={handleUpdateFileTags} />
+            </div>
+        </SidebarLayout>
     );
 }
