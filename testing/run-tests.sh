@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Simple test runner with menu options
+# Allows running individual tests or the complete suite
+
+echo "🧪 AI Knowledge Agent Test Runner"
+echo "================================="
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to show menu
+show_menu() {
+    echo -e "\n${YELLOW}Available Tests:${NC}"
+    echo "1. Infrastructure Test (PostgreSQL, Redis, Qdrant, Ollama)"
+    echo "2. Services Test (Backend, Document Processor, Firecrawl)"
+    echo "3. Embeddings Test (Ollama & OpenAI embedding generation)"
+    echo "4. Scraping Pipeline Test (Complete scraping workflow)"
+    echo "5. Scraping + Q&A Test (Complete pipeline with question answering)"
+    echo "6. Complete Integration Test (All tests in sequence)"
+    echo "7. Quick Health Check (Basic connectivity only)"
+    echo "0. Exit"
+    echo ""
+}
+
+# Function to run quick health check
+quick_health_check() {
+    echo -e "\n${BLUE}Quick Health Check${NC}"
+    echo "=================="
+    
+    # Check Docker services
+    echo -n "Docker services: "
+    if docker compose ps | grep -q "Up"; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+    fi
+    
+    # Check Ollama
+    echo -n "Ollama: "
+    if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+    fi
+    
+    # Check Document Processor
+    echo -n "Document Processor: "
+    if curl -s http://localhost:8081/health > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+    fi
+    
+    # Check Qdrant
+    echo -n "Qdrant: "
+    if curl -s http://localhost:6336/collections > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC}"
+    else
+        echo -e "${RED}✗${NC}"
+    fi
+}
+
+# Main loop
+while true; do
+    show_menu
+    read -p "Select a test to run (0-7): " choice
+    
+    case $choice in
+        1)
+            echo -e "\n${BLUE}Running Infrastructure Test...${NC}"
+            ./test-infrastructure.sh
+            ;;
+        2)
+            echo -e "\n${BLUE}Running Services Test...${NC}"
+            ./test-services.sh
+            ;;
+        3)
+            echo -e "\n${BLUE}Running Embeddings Test...${NC}"
+            ./test-embeddings.sh
+            ;;
+        4)
+            echo -e "\n${BLUE}Running Scraping Pipeline Test...${NC}"
+            ./test-scraping.sh
+            ;;
+        5)
+            echo -e "\n${BLUE}Running Scraping + Q&A Test...${NC}"
+            ./test-scraping-with-qa.sh
+            ;;
+        6)
+            echo -e "\n${BLUE}Running Complete Integration Test...${NC}"
+            ./test-integration.sh
+            ;;
+        7)
+            quick_health_check
+            ;;
+        0)
+            echo -e "\n${GREEN}Goodbye!${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "\n${RED}Invalid option. Please select 0-7.${NC}"
+            ;;
+    esac
+    
+    echo -e "\n${YELLOW}Press Enter to continue...${NC}"
+    read
+done

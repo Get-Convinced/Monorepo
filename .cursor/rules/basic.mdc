@@ -1,0 +1,13 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+- Only modify code directly relevant to the specific request. Avoid changing unrelated functionality.
+- Never replace code with placeholders like `// ... rest of the processing ...`. Always include complete code.
+- Break problems into smaller steps. Think through each step separately before implementing.
+- Always provide a complete PLAN with REASONING based on evidence from code and logs before making changes.
+- Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
+- Use the folder ./docs/implmentation_phases to maintain your to-do list. You can have names such as phase-1/2/3 and feature_<name> for different features we are working on
+- Use the folder ./docs/UI_reference for reference UI wireframes. You will use ANT desgin stack to implement the wireframes and dont ahve to stick to whats given to the dot. Since the image could use a different design language
+- use uv for python and pnpm for node projects for package management

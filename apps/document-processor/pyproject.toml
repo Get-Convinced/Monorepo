@@ -1,0 +1,63 @@
+[project]
+name = "document-processor"
+version = "0.1.0"
+description = "Unified document processor with GPT and Docling support"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "fastapi==0.114.2",
+    "uvicorn[standard]==0.30.6",
+    "pydantic==2.9.2",
+    "python-multipart==0.0.9",
+    "python-dotenv==1.0.1",
+    "redis==5.0.8",
+    "rq==1.16.2",
+    "qdrant-client==1.9.1",
+    "httpx==0.27.0",
+    "openai==1.40.0",
+    "langchain-text-splitters==0.2.2",
+    "ollama==0.3.3",
+    "PyPDF2==3.0.1",
+    "pdfplumber==0.10.3",
+    "python-docx==1.1.0",
+    "python-pptx==0.6.23",
+    "reportlab==4.0.7",
+    "PyMuPDF==1.23.26",
+    "Pillow==10.0.1",
+    "docling==1.0.0",
+    "deepsearch-toolkit",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==7.4.4",
+    "pytest-asyncio==0.21.1",
+    "pytest-mock==3.12.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings"
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "requires_openai: marks tests as requiring OpenAI API key",
+    "requires_qdrant: marks tests as requiring Qdrant",
+    "requires_ollama: marks tests as requiring Ollama"
+]

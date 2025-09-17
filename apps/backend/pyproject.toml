@@ -1,0 +1,8 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "FastAPI backend for AI Knowledge Agent"
+requires-python = ">=3.11"
+
+[tool.pdm]
+# Placeholder if using PDM; otherwise we will use requirements.txt

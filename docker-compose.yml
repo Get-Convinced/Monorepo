@@ -1,0 +1,60 @@
+version: "3.9"
+services:
+    postgres:
+        image: postgres:16-alpine
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_DB: akamvp
+        ports:
+            - "5432:5432"
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+
+    redis:
+        image: redis:7-alpine
+        restart: unless-stopped
+        ports:
+            - "6380:6379"
+        command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+    qdrant:
+        image: qdrant/qdrant:latest
+        restart: unless-stopped
+        ports:
+            - "6336:6333" # HTTP API
+            - "6335:6334" # gRPC
+        volumes:
+            - qdrant_storage:/qdrant/storage
+
+    # Firecrawl for web scraping (official self-hosted)
+    firecrawl:
+        build:
+            context: ./firecrawl/apps/api
+            dockerfile: Dockerfile
+        restart: unless-stopped
+        ports:
+            - "3002:3002"
+        environment:
+            # Required
+            NUM_WORKERS_PER_QUEUE: 8
+            PORT: 3002
+            HOST: 0.0.0.0
+            REDIS_URL: redis://redis:6379
+            REDIS_RATE_LIMIT_URL: redis://redis:6379
+            USE_DB_AUTHENTICATION: false
+            # Using internal PostgreSQL for Firecrawl's queue management
+            NUQ_DATABASE_URL: postgres://postgres:postgres@postgres:5432/akamvp
+            # Optional - add your OpenAI key for LLM features
+            # OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+        depends_on:
+            - postgres
+            - redis
+        volumes:
+            - firecrawl_data:/app/data
+
+volumes:
+    pgdata:
+    qdrant_storage:
+    firecrawl_data:

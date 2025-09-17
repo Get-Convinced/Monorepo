@@ -1,0 +1,32 @@
+fastapi==0.114.2
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+python-multipart==0.0.9
+python-dotenv==1.0.1
+redis==5.0.8
+rq==1.16.2
+qdrant-client==1.9.1
+httpx==0.27.0
+openai==1.40.0
+langchain-text-splitters==0.2.2
+ollama==0.3.3
+
+# Document processing dependencies
+PyPDF2==3.0.1
+pdfplumber==0.10.3
+python-docx==1.1.0
+python-pptx==0.6.23
+reportlab==4.0.7
+PyMuPDF==1.23.26
+Pillow==10.0.1
+
+# Docling dependencies
+docling==1.0.0
+docling[vision]==1.0.0
+docling[asr]==1.0.0
+docling[ocr]==1.0.0
+
+# Testing dependencies
+pytest==7.4.4
+pytest-asyncio==0.21.1
+pytest-mock==3.12.0
