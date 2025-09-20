@@ -1,35 +1,53 @@
-'use client';
+"use client";
 
 import { SidebarLayout } from "@/components/dashboard/sidebar-layout";
 import { ChatInterface } from "@/components/chat/chat-interface";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSimpleAuth } from "@/hooks/use-simple-auth";
+import { useEffect } from "react";
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [userData, setUserData] = useState<{ accessToken?: string; verified?: boolean } | null>(null);
-  const [loading, setLoading] = useState(false);
+  const {
+    isAuthenticated,
+    isLoading,
+    user,
+    isRedirecting,
+    shouldRedirect,
+    redirectToLogin,
+    originalIsAuthenticated,
+    originalUser,
+    hasStoredAuth,
+  } = useSimpleAuth();
+
 
   useEffect(() => {
-    const stored = localStorage.getItem('user');
-    if (stored) {
-      setUserData(JSON.parse(stored));
-    } else {
-      setUserData(null);
+    if (shouldRedirect && isAuthenticated === false && !user) {
+      redirectToLogin();
     }
-    setLoading(true); 
-  }, []);
+  }, [user, isAuthenticated, shouldRedirect, redirectToLogin]);
 
-  useEffect(() => {
-    if (loading) {
-      if (!userData?.verified) {
-        router.replace('/login');
-      }
-    }
-  }, [userData, loading, router]);
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-lg">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-  if (!userData?.verified) {
-    return null;
+  // Show loading if not authenticated (redirect will happen)
+  // Use the effective values from the hook
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-lg">Redirecting...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
