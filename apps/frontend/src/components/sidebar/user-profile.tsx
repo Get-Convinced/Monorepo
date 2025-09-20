@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import {  useEffect, useState } from "react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -12,11 +12,23 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChevronUp, User, Settings, LogOut } from "lucide-react";
 import { ProfileEditModal } from "./profile-edit-modal";
+import { useRouter } from "next/navigation";
+import { useAuth, useAuthActions } from "@frontegg/react";
 
 export function UserProfile() {
+    const router = useRouter();
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+     const { logout } = useAuthActions(); 
 
-    const user = {
+ const handleLogout = () => {
+    logout(); 
+    localStorage.removeItem('user'); 
+    router.push('/login');
+  };
+    
+
+
+    const defaultUser = {
         name: "John Doe",
         email: "john@example.com",
         role: "Product Manager",
@@ -34,17 +46,17 @@ export function UserProfile() {
                                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                             >
                                 <Avatar className="h-8 w-8 rounded-lg">
-                                    <AvatarImage src={user.avatar} alt={user.name} />
+                                    <AvatarImage src={defaultUser.avatar} alt={defaultUser.name} />
                                     <AvatarFallback className="rounded-lg">
-                                        {user.name
+                                        {defaultUser.name
                                             .split(" ")
                                             .map((n) => n[0])
                                             .join("")}
                                     </AvatarFallback>
                                 </Avatar>
                                 <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-semibold">{user.name}</span>
-                                    <span className="truncate text-xs">{user.role}</span>
+                                    <span className="truncate font-semibold">{defaultUser.name}</span>
+                                    <span className="truncate text-xs">{defaultUser.role}</span>
                                 </div>
                                 <ChevronUp className="ml-auto" />
                             </SidebarMenuButton>
@@ -58,8 +70,8 @@ export function UserProfile() {
                             <DropdownMenuItem className="gap-2 p-2">
                                 <User className="h-4 w-4" />
                                 <div className="grid flex-1 text-left text-sm leading-tight">
-                                    <span className="truncate font-semibold">{user.name}</span>
-                                    <span className="truncate text-xs">{user.email}</span>
+                                    <span className="truncate font-semibold">{defaultUser.name}</span>
+                                    <span className="truncate text-xs">{defaultUser.email}</span>
                                 </div>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -72,9 +84,9 @@ export function UserProfile() {
                                 <span>Account Settings</span>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="gap-2 p-2 text-red-600">
+                            <DropdownMenuItem className="gap-2 p-2 text-red-600" onClick={handleLogout}>
                                 <LogOut className="h-4 w-4" />
-                                <span>Sign out</span>
+                                <span >Sign out</span>
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
