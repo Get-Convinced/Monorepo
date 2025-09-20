@@ -2,9 +2,16 @@
 
 import { SidebarLayout } from "@/components/dashboard/sidebar-layout";
 import { KnowledgeSources } from "@/components/knowledge/knowledge-sources";
+import { getAppUserSession } from "@frontegg/nextjs/app";
+import { redirect } from "next/navigation";
 import { useState } from "react";
 
-export default function KnowledgePage() {
+export default async function KnowledgePage() {
+      const userSession = await getAppUserSession();
+      console.log(userSession);
+      if (!userSession) {
+        redirect("/");
+      }
     const websites = [
         {
             id: 1,

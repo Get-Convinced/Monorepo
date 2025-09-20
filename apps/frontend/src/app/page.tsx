@@ -1,5 +1,19 @@
+import { getAppUserSession } from "@frontegg/nextjs/app";
 import { redirect } from "next/navigation";
+import Login from "./login/page";
 
-export default function Home() {
+export default async function Home() {
+  const userSession = await getAppUserSession();
+  console.log('main', userSession)
+  if (userSession) {
     redirect("/dashboard");
+  }
+
+  const isHosted = process.env.FRONTEGG_HOSTED_LOGIN === "true";
+  
+  return (
+    <main>
+      <Login isHosted={isHosted} />
+    </main>
+  );
 }
