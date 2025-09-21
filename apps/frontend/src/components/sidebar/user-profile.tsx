@@ -23,9 +23,9 @@ import { useCallback } from "react";
 export function UserProfile() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const router = useRouter();
+  
 
   const logout = useCallback(() => {
-    console.log("first");
     router.replace("/account/logout");
   }, [router]);
 
