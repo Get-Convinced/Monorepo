@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   const userSession = await getAppUserSession();
   console.log(userSession);
   if (!userSession) {
-    redirect("/");
+    redirect("/account/login");
   }
   return (
     <SidebarLayout>
