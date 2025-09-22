@@ -1,22 +1,27 @@
 "use client";
 import { useLoginWithRedirect } from "@frontegg/nextjs";
+import { getAppUserSession } from "@frontegg/nextjs/app";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 
 interface LoginProps {
   isHosted: boolean;
 }
-const Login = (props: LoginProps) => {
-  const loginWithRedirect = useLoginWithRedirect();
+const Login = async(props: LoginProps) => {
+  // const loginWithRedirect = useLoginWithRedirect();
+
+  const userSession = await getAppUserSession();
+  if (!userSession) {
+    redirect("/account/login");
+  }
   const router = useRouter();
-console.log('logout')
-  const login = () => {
-    if (props.isHosted) {
-      loginWithRedirect();
-    } else {
-      router.push("/account/login");
-    }
-  };
+  // const login = () => {
+  //   if (props.isHosted) {
+  //     loginWithRedirect();
+  //   } else {
+  //     router.push("/account/login");
+  //   }
+  // };
   return (
     <section className="flex items-center justify-center min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
       <div className="bg-white shadow-lg rounded-2xl p-8 md:p-12 max-w-md w-full flex flex-col items-center">
@@ -39,7 +44,7 @@ console.log('logout')
 
         <button
           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-lg shadow-md transition duration-200"
-          onClick={login}
+          // onClick={login}
         >
           Sign in
         </button>
