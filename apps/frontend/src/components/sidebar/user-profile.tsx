@@ -26,7 +26,7 @@ export function UserProfile() {
   
 
   const logout = useCallback(() => {
-    router.replace("/account/logout");
+    router.replace("/account/login");
   }, [router]);
 
   const user = {
