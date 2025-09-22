@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   const userSession = await getAppUserSession();
-  console.log(userSession);
   if (!userSession) {
     redirect("/account/login");
   }

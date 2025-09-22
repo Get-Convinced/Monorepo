@@ -19,21 +19,23 @@ import { ProfileEditModal } from "./profile-edit-modal";
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+  import { useAuth } from "@frontegg/nextjs";
+
 
 export function UserProfile() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const router = useRouter();
-  
-
+  const { user: UserData } = useAuth();
   const logout = useCallback(() => {
-    router.replace("/account/login");
+       router.replace("/account/logout");
   }, [router]);
 
+
   const user = {
-    name: "John Doe",
-    email: "john@example.com",
-    role: "Product Manager",
-    avatar: "/user-avatar.jpg",
+    name: UserData?.name || "John Doe",
+    email: UserData?.email || "john@example.com",
+    role:  "Admin",
+    avatar: UserData?.profilePictureUrl || "/user-avatar.jpg",
   };
 
   return (

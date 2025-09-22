@@ -9,7 +9,7 @@ interface LoginProps {
 const Login = (props: LoginProps) => {
   const loginWithRedirect = useLoginWithRedirect();
   const router = useRouter();
-
+console.log('logout')
   const login = () => {
     if (props.isHosted) {
       loginWithRedirect();
