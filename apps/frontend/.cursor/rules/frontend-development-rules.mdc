@@ -1,0 +1,1241 @@
+---
+description: Frontend-specific development rules for Next.js with shadcn/ui and Frontegg authentication
+globs: ["apps/frontend/**/*", "src/**/*", "components/**/*", "pages/**/*", "app/**/*"]
+alwaysApply: true
+---
+
+# Frontend Development Rules
+
+## 🎯 **Frontend-Specific Standards**
+These rules are specific to the Next.js-based frontend application using shadcn/ui and Frontegg hosted authentication. Follow these in addition to the common development standards.
+
+---
+
+## 🏗️ **Next.js App Router Architecture**
+
+### **File-Based Routing Structure**
+```typescript
+// ✅ CORRECT - App Router structure
+src/app/
+├── layout.tsx                    // Root layout
+├── page.tsx                      // Home page
+├── loading.tsx                   // Loading UI
+├── error.tsx                     // Error UI
+├── not-found.tsx                 // 404 page
+├── auth/
+│   ├── login/
+│   │   └── page.tsx             // /auth/login
+│   └── callback/
+│       └── page.tsx             // /auth/callback
+├── dashboard/
+│   ├── layout.tsx               // Dashboard layout
+│   ├── page.tsx                 // /dashboard
+│   └── analytics/
+│       └── page.tsx             // /dashboard/analytics
+└── api/                         // API routes (minimal usage)
+    └── health/
+        └── route.ts
+```
+
+### **Component Organization**
+```typescript
+// ✅ CORRECT - Component structure
+src/components/
+├── ui/                          // Reusable UI primitives
+│   ├── button/
+│   │   ├── button.tsx
+│   │   ├── button.test.tsx
+│   │   └── index.ts
+│   └── modal/
+│       ├── modal.tsx
+│       ├── modal.test.tsx
+│       └── index.ts
+├── features/                    // Feature-specific components
+│   ├── auth/
+│   │   ├── login-form.tsx
+│   │   └── user-profile.tsx
+│   ├── documents/
+│   │   ├── document-list.tsx
+│   │   ├── document-upload.tsx
+│   │   └── document-viewer.tsx
+│   └── chat/
+│       ├── chat-interface.tsx
+│       ├── message-list.tsx
+│       └── message-input.tsx
+└── layout/                      // Layout components
+    ├── header.tsx
+    ├── sidebar.tsx
+    └── footer.tsx
+```
+
+---
+
+## ⚛️ **React Component Standards**
+
+### **Functional Components Only**
+```typescript
+// ✅ CORRECT - Functional component with TypeScript
+interface DocumentListProps {
+  documents: Document[];
+  onDocumentSelect: (document: Document) => void;
+  loading?: boolean;
+}
+
+export const DocumentList: React.FC<DocumentListProps> = ({
+  documents,
+  onDocumentSelect,
+  loading = false
+}) => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const handleSelect = useCallback((document: Document) => {
+    setSelectedId(document.id);
+    onDocumentSelect(document);
+  }, [onDocumentSelect]);
+
+  if (loading) {
+    return <DocumentListSkeleton />;
+  }
+
+  return (
+    <div className="document-list">
+      {documents.map((document) => (
+        <DocumentItem
+          key={document.id}
+          document={document}
+          selected={selectedId === document.id}
+          onSelect={handleSelect}
+        />
+      ))}
+    </div>
+  );
+};
+
+// ❌ WRONG - Class component
+class DocumentList extends React.Component {
+  // Don't use class components
+}
+```
+
+### **Custom Hooks Pattern**
+```typescript
+// ✅ CORRECT - Custom hooks for business logic
+export const useDocuments = (organizationId: string) => {
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDocuments = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await apiClient.get(`/documents`, {
+        params: { organizationId }
+      });
+      
+      setDocuments(response.data.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch documents');
+    } finally {
+      setLoading(false);
+    }
+  }, [organizationId]);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
+
+  const uploadDocument = useCallback(async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('organizationId', organizationId);
+
+    const response = await apiClient.post('/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+    const newDocument = response.data.data;
+    setDocuments(prev => [newDocument, ...prev]);
+    
+    return newDocument;
+  }, [organizationId]);
+
+  return {
+    documents,
+    loading,
+    error,
+    refetch: fetchDocuments,
+    uploadDocument
+  };
+};
+```
+
+### **Error Boundaries**
+```typescript
+// ✅ CORRECT - Error boundary component
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class ErrorBoundary extends React.Component<
+  React.PropsWithChildren<{}>,
+  ErrorBoundaryState
+> {
+  constructor(props: React.PropsWithChildren<{}>) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+    // Send to error reporting service
+    errorReportingService.captureException(error, {
+      extra: errorInfo
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h2>Something went wrong</h2>
+          <p>We're sorry, but something unexpected happened.</p>
+          <button onClick={() => window.location.reload()}>
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+---
+
+## 🔐 **Authentication with Frontegg**
+
+### **Frontegg Hosted Authentication**
+```typescript
+// ✅ CORRECT - Frontegg hosted authentication setup
+'use client';
+
+import { FronteggProvider } from '@frontegg/nextjs';
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
+  children 
+}) => {
+  const fronteggConfig = {
+    contextOptions: {
+      baseUrl: process.env.NEXT_PUBLIC_FRONTEGG_BASE_URL!,
+      clientId: process.env.NEXT_PUBLIC_FRONTEGG_CLIENT_ID!,
+    },
+    hostedLoginBox: true, // Use Frontegg hosted login
+    authOptions: {
+      keepSessionAlive: true,
+      autoRefresh: true
+    }
+  };
+
+  return (
+    <FronteggProvider {...fronteggConfig}>
+      {children}
+    </FronteggProvider>
+  );
+};
+```
+
+### **Authentication Hook**
+```typescript
+// ✅ CORRECT - Authentication hook
+export const useAuth = () => {
+  const { user, isAuthenticated, isLoading } = useAuthUser();
+  const { loginWithRedirect, logout } = useAuth();
+
+  const login = useCallback(() => {
+    loginWithRedirect();
+  }, [loginWithRedirect]);
+
+  const handleLogout = useCallback(() => {
+    logout();
+  }, [logout]);
+
+  return {
+    user,
+    isAuthenticated,
+    isLoading,
+    login,
+    logout: handleLogout,
+    token: user?.accessToken
+  };
+};
+```
+
+### **Frontegg Middleware Authentication**
+```typescript
+// ✅ CORRECT - Use Frontegg middleware for route protection
+// No need for custom ProtectedRoute components
+// Frontegg middleware handles authentication automatically
+
+// middleware.ts
+import { NextRequest } from 'next/server';
+import { withFronteggApp } from '@frontegg/nextjs/middleware';
+
+export default withFronteggApp();
+
+export const config = {
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+  ],
+};
+
+// Layout components can assume authentication is handled
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="dashboard-layout">
+      <Sidebar />
+      <main className="main-content">
+        {children}
+      </main>
+    </div>
+  );
+}
+```
+
+---
+
+## 🎨 **UI/UX Standards**
+
+### **shadcn/ui with Design Tokens**
+```typescript
+// ✅ CORRECT - shadcn/ui with design.json tokens
+import { createContext, useContext, useEffect, useState } from 'react';
+import designTokens from '../design.json';
+
+type Theme = 'light' | 'dark';
+
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  tokens: typeof designTokens;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ 
+  children 
+}) => {
+  const [theme, setTheme] = useState<Theme>('light');
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    
+    // Apply semantic tokens based on theme
+    const semanticTokens = designTokens.semantic[theme];
+    
+    Object.entries(semanticTokens).forEach(([key, value]) => {
+      root.style.setProperty(key, value as string);
+    });
+    
+    root.classList.remove('light', 'dark');
+    root.classList.add(theme);
+  }, [theme]);
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme, tokens: designTokens }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export const useTheme = () => {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+};
+```
+
+### **shadcn/ui Components with Design Tokens**
+```typescript
+// ✅ CORRECT - shadcn/ui components with design.json tokens
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { useTheme } from '@/components/theme-provider';
+
+export const DocumentGrid: React.FC<{ documents: Document[] }> = ({ 
+  documents 
+}) => {
+  const { tokens } = useTheme();
+  
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+      {documents.map((document) => (
+        <Card 
+          key={document.id}
+          className="hover:shadow-lg transition-shadow cursor-pointer"
+          style={{
+            borderRadius: tokens.components.card.radius,
+            padding: tokens.components.card.padding
+          }}
+        >
+          <CardContent className="p-0">
+            <div className="flex items-center space-x-3">
+              <FileIcon type={document.type} className="w-8 h-8 text-primary" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-medium text-foreground truncate">
+                  {document.filename}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(document.size)}
+                </p>
+                <Badge 
+                  variant={document.status === 'completed' ? 'default' : 'secondary'}
+                  className="mt-1"
+                >
+                  {document.status}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+};
+```
+
+### **Loading States**
+```typescript
+// ✅ CORRECT - Skeleton loading components
+export const DocumentListSkeleton: React.FC = () => {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className="animate-pulse">
+          <div className="flex items-center space-x-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="w-10 h-10 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
+              <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+```
+
+---
+
+## 🔄 **State Management**
+
+### **Zustand Store Pattern**
+```typescript
+// ✅ CORRECT - Zustand store with TypeScript
+interface DocumentStore {
+  documents: Document[];
+  selectedDocument: Document | null;
+  loading: boolean;
+  error: string | null;
+  
+  // Actions
+  setDocuments: (documents: Document[]) => void;
+  addDocument: (document: Document) => void;
+  selectDocument: (document: Document | null) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  
+  // Async actions
+  fetchDocuments: (organizationId: string) => Promise<void>;
+  uploadDocument: (file: File, organizationId: string) => Promise<Document>;
+}
+
+export const useDocumentStore = create<DocumentStore>((set, get) => ({
+  documents: [],
+  selectedDocument: null,
+  loading: false,
+  error: null,
+
+  setDocuments: (documents) => set({ documents }),
+  addDocument: (document) => set((state) => ({ 
+    documents: [document, ...state.documents] 
+  })),
+  selectDocument: (selectedDocument) => set({ selectedDocument }),
+  setLoading: (loading) => set({ loading }),
+  setError: (error) => set({ error }),
+
+  fetchDocuments: async (organizationId) => {
+    set({ loading: true, error: null });
+    
+    try {
+      const response = await apiClient.get('/documents', {
+        params: { organizationId }
+      });
+      
+      set({ documents: response.data.data, loading: false });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to fetch documents',
+        loading: false 
+      });
+    }
+  },
+
+  uploadDocument: async (file, organizationId) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('organizationId', organizationId);
+
+    const response = await apiClient.post('/documents/upload', formData);
+    const newDocument = response.data.data;
+    
+    get().addDocument(newDocument);
+    return newDocument;
+  }
+}));
+```
+
+### **React Query for Server State**
+```typescript
+// ✅ CORRECT - React Query for server state management
+export const useDocuments = (organizationId: string) => {
+  return useQuery({
+    queryKey: ['documents', organizationId],
+    queryFn: async () => {
+      const response = await apiClient.get('/documents', {
+        params: { organizationId }
+      });
+      return response.data.data as Document[];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+  });
+};
+
+export const useUploadDocument = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ file, organizationId }: { 
+      file: File; 
+      organizationId: string; 
+    }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('organizationId', organizationId);
+
+      const response = await apiClient.post('/documents/upload', formData);
+      return response.data.data as Document;
+    },
+    onSuccess: (newDocument, { organizationId }) => {
+      // Invalidate and refetch documents
+      queryClient.invalidateQueries(['documents', organizationId]);
+      
+      // Optimistically update cache
+      queryClient.setQueryData(['documents', organizationId], (old: Document[] = []) => 
+        [newDocument, ...old]
+      );
+    },
+  });
+};
+```
+
+---
+
+## 🌐 **API Integration**
+
+### **API Client Setup**
+```typescript
+// ✅ CORRECT - Axios client with interceptors
+import axios, { AxiosError, AxiosResponse } from 'axios';
+
+export const apiClient = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor for auth
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getAuthToken(); // Get from Frontegg
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    const organizationId = getCurrentOrganizationId();
+    if (organizationId) {
+      config.headers['X-Organization-ID'] = organizationId;
+    }
+    
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor for error handling
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      // Handle unauthorized - redirect to login
+      window.location.href = '/auth/login';
+    }
+    
+    if (error.response?.status >= 500) {
+      // Handle server errors
+      toast.error('Server error. Please try again later.');
+    }
+    
+    return Promise.reject(error);
+  }
+);
+```
+
+### **Type-Safe API Calls**
+```typescript
+// ✅ CORRECT - Type-safe API functions
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  meta?: {
+    timestamp: string;
+    requestId: string;
+  };
+}
+
+export interface ApiError {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: Record<string, any>;
+  };
+}
+
+export const documentApi = {
+  async getDocuments(organizationId: string): Promise<Document[]> {
+    const response = await apiClient.get<ApiResponse<Document[]>>('/documents', {
+      params: { organizationId }
+    });
+    return response.data.data;
+  },
+
+  async uploadDocument(file: File, organizationId: string): Promise<Document> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('organizationId', organizationId);
+
+    const response = await apiClient.post<ApiResponse<Document>>(
+      '/documents/upload',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    );
+    
+    return response.data.data;
+  },
+
+  async deleteDocument(documentId: string): Promise<void> {
+    await apiClient.delete(`/documents/${documentId}`);
+  }
+};
+```
+
+---
+
+## 💬 **Chat Interface Standards**
+
+### **Chat Component Architecture**
+```typescript
+// ✅ CORRECT - Chat interface with real-time updates
+export const ChatInterface: React.FC<{ sessionId: string }> = ({ 
+  sessionId 
+}) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
+
+  const sendMessage = useCallback(async (content: string) => {
+    if (!content.trim() || loading) return;
+
+    const userMessage: ChatMessage = {
+      id: generateId(),
+      content,
+      role: 'user',
+      timestamp: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setLoading(true);
+
+    try {
+      const response = await apiClient.post('/chat/messages', {
+        sessionId,
+        content,
+      });
+
+      const aiMessage: ChatMessage = response.data.data;
+      setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      toast.error('Failed to send message');
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId, loading]);
+
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage(input);
+  }, [input, sendMessage]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message) => (
+          <MessageBubble key={message.id} message={message} />
+        ))}
+        {loading && <TypingIndicator />}
+        <div ref={messagesEndRef} />
+      </div>
+      
+      <form onSubmit={handleSubmit} className="p-4 border-t">
+        <div className="flex space-x-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask a question about your documents..."
+            disabled={loading}
+            className="flex-1"
+          />
+          <Button 
+            type="primary" 
+            htmlType="submit" 
+            disabled={!input.trim() || loading}
+            icon={<SendOutlined />}
+          >
+            Send
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+};
+```
+
+### **Message Rendering**
+```typescript
+// ✅ CORRECT - Message component with citations
+export const MessageBubble: React.FC<{ message: ChatMessage }> = ({ 
+  message 
+}) => {
+  const isUser = message.role === 'user';
+
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`max-w-[70%] rounded-lg p-3 ${
+          isUser
+            ? 'bg-blue-500 text-white'
+            : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white'
+        }`}
+      >
+        <div className="prose prose-sm max-w-none">
+          <ReactMarkdown
+            components={{
+              code: ({ node, inline, className, children, ...props }) => {
+                const match = /language-(\w+)/.exec(className || '');
+                return !inline && match ? (
+                  <SyntaxHighlighter
+                    style={tomorrow}
+                    language={match[1]}
+                    PreTag="div"
+                    {...props}
+                  >
+                    {String(children).replace(/\n$/, '')}
+                  </SyntaxHighlighter>
+                ) : (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              },
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
+        </div>
+        
+        {message.citations && message.citations.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
+            <div className="text-xs opacity-75">Sources:</div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {message.citations.map((citation, index) => (
+                <CitationBadge key={index} citation={citation} />
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <div className="text-xs opacity-50 mt-1">
+          {formatTime(message.timestamp)}
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+---
+
+## 🧪 **Testing Standards**
+
+### **Component Testing**
+```typescript
+// ✅ CORRECT - Component testing with React Testing Library
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { DocumentList } from '../document-list';
+
+const createTestQueryClient = () => new QueryClient({
+  defaultOptions: {
+    queries: { retry: false },
+    mutations: { retry: false },
+  },
+});
+
+const renderWithProviders = (component: React.ReactElement) => {
+  const queryClient = createTestQueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {component}
+    </QueryClientProvider>
+  );
+};
+
+describe('DocumentList', () => {
+  const mockDocuments: Document[] = [
+    {
+      id: '1',
+      filename: 'test.pdf',
+      size: 1024,
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00Z'
+    },
+    {
+      id: '2',
+      filename: 'document.docx',
+      size: 2048,
+      status: 'processing',
+      createdAt: '2024-01-02T00:00:00Z'
+    }
+  ];
+
+  it('should render document list correctly', () => {
+    renderWithProviders(
+      <DocumentList 
+        documents={mockDocuments} 
+        onDocumentSelect={jest.fn()} 
+      />
+    );
+
+    expect(screen.getByText('test.pdf')).toBeInTheDocument();
+    expect(screen.getByText('document.docx')).toBeInTheDocument();
+  });
+
+  it('should call onDocumentSelect when document is clicked', async () => {
+    const mockOnSelect = jest.fn();
+    
+    renderWithProviders(
+      <DocumentList 
+        documents={mockDocuments} 
+        onDocumentSelect={mockOnSelect} 
+      />
+    );
+
+    fireEvent.click(screen.getByText('test.pdf'));
+
+    await waitFor(() => {
+      expect(mockOnSelect).toHaveBeenCalledWith(mockDocuments[0]);
+    });
+  });
+
+  it('should show loading skeleton when loading', () => {
+    renderWithProviders(
+      <DocumentList 
+        documents={[]} 
+        onDocumentSelect={jest.fn()} 
+        loading={true} 
+      />
+    );
+
+    expect(screen.getByTestId('document-list-skeleton')).toBeInTheDocument();
+  });
+});
+```
+
+### **Hook Testing**
+```typescript
+// ✅ CORRECT - Custom hook testing
+import { renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useDocuments } from '../use-documents';
+import { apiClient } from '../../lib/api-client';
+
+jest.mock('../../lib/api-client');
+const mockApiClient = apiClient as jest.Mocked<typeof apiClient>;
+
+const createWrapper = () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+};
+
+describe('useDocuments', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should fetch documents successfully', async () => {
+    const mockDocuments = [
+      { id: '1', filename: 'test.pdf' },
+      { id: '2', filename: 'doc.docx' }
+    ];
+
+    mockApiClient.get.mockResolvedValue({
+      data: { success: true, data: mockDocuments }
+    });
+
+    const { result } = renderHook(
+      () => useDocuments('org-123'),
+      { wrapper: createWrapper() }
+    );
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data).toEqual(mockDocuments);
+    expect(mockApiClient.get).toHaveBeenCalledWith('/documents', {
+      params: { organizationId: 'org-123' }
+    });
+  });
+
+  it('should handle fetch error', async () => {
+    mockApiClient.get.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(
+      () => useDocuments('org-123'),
+      { wrapper: createWrapper() }
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+
+    expect(result.current.error).toBeInstanceOf(Error);
+  });
+});
+```
+
+### **E2E Testing with Playwright**
+```typescript
+// ✅ CORRECT - E2E test for document upload
+import { test, expect } from '@playwright/test';
+
+test.describe('Document Upload', () => {
+  test.beforeEach(async ({ page }) => {
+    // Mock authentication
+    await page.goto('/auth/login');
+    await page.fill('[data-testid="email"]', 'test@example.com');
+    await page.fill('[data-testid="password"]', 'password123');
+    await page.click('[data-testid="login-button"]');
+    
+    await expect(page).toHaveURL('/dashboard');
+  });
+
+  test('should upload document successfully', async ({ page }) => {
+    await page.goto('/documents');
+    
+    // Click upload button
+    await page.click('[data-testid="upload-button"]');
+    
+    // Upload file
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles('tests/fixtures/sample.pdf');
+    
+    // Wait for upload to complete
+    await expect(page.locator('[data-testid="upload-success"]')).toBeVisible();
+    
+    // Verify document appears in list
+    await expect(page.locator('text=sample.pdf')).toBeVisible();
+  });
+
+  test('should show error for invalid file type', async ({ page }) => {
+    await page.goto('/documents');
+    
+    await page.click('[data-testid="upload-button"]');
+    
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles('tests/fixtures/invalid.txt');
+    
+    await expect(page.locator('[data-testid="upload-error"]')).toBeVisible();
+    await expect(page.locator('text=Invalid file type')).toBeVisible();
+  });
+});
+```
+
+---
+
+## 🎨 **Styling Standards**
+
+### **Tailwind CSS Usage**
+```typescript
+// ✅ CORRECT - Tailwind with consistent spacing and colors
+export const DocumentCard: React.FC<{ document: Document }> = ({ 
+  document 
+}) => {
+  return (
+    <div className="group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:shadow-md transition-all duration-200">
+      <div className="flex items-start space-x-3">
+        <div className="flex-shrink-0">
+          <FileIcon 
+            type={document.type} 
+            className="w-10 h-10 text-blue-500" 
+          />
+        </div>
+        
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+            {document.filename}
+          </h3>
+          
+          <div className="mt-1 flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+            <span>{formatFileSize(document.size)}</span>
+            <span>•</span>
+            <span>{formatDate(document.createdAt)}</span>
+          </div>
+          
+          <div className="mt-2">
+            <StatusBadge status={document.status} />
+          </div>
+        </div>
+        
+        <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <DropdownMenu>
+            <DropdownMenu.Trigger asChild>
+              <Button variant="ghost" size="sm">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content>
+              <DropdownMenu.Item>View</DropdownMenu.Item>
+              <DropdownMenu.Item>Download</DropdownMenu.Item>
+              <DropdownMenu.Item className="text-red-600">Delete</DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu>
+        </div>
+      </div>
+    </div>
+  );
+};
+```
+
+### **CSS Modules for Complex Styles**
+```scss
+// ✅ CORRECT - CSS modules for component-specific styles
+.chatInterface {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.messageList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  scroll-behavior: smooth;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+  }
+}
+
+.messageInput {
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  
+  .inputContainer {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
+  }
+  
+  .textArea {
+    flex: 1;
+    min-height: 40px;
+    max-height: 120px;
+    resize: none;
+    border-radius: 8px;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    
+    &:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px var(--primary-color-alpha);
+    }
+  }
+}
+```
+
+---
+
+## 🚫 **Anti-Patterns to Avoid**
+
+### **React Anti-Patterns**
+```typescript
+// ❌ WRONG - Direct DOM manipulation
+const MyComponent = () => {
+  useEffect(() => {
+    document.getElementById('my-element').style.color = 'red';
+  }, []);
+  
+  return <div id="my-element">Content</div>;
+};
+
+// ✅ CORRECT - React state and refs
+const MyComponent = () => {
+  const [isHighlighted, setIsHighlighted] = useState(false);
+  
+  return (
+    <div className={isHighlighted ? 'text-red-500' : 'text-gray-900'}>
+      Content
+    </div>
+  );
+};
+```
+
+```typescript
+// ❌ WRONG - Inline object/function creation in render
+const MyComponent = ({ items }) => {
+  return (
+    <div>
+      {items.map(item => (
+        <ItemComponent 
+          key={item.id}
+          item={item}
+          onClick={() => handleClick(item)} // Creates new function on every render
+          style={{ marginTop: 10 }} // Creates new object on every render
+        />
+      ))}
+    </div>
+  );
+};
+
+// ✅ CORRECT - Memoized callbacks and stable objects
+const MyComponent = ({ items }) => {
+  const handleClick = useCallback((item) => {
+    // Handle click
+  }, []);
+  
+  const itemStyle = useMemo(() => ({ marginTop: 10 }), []);
+  
+  return (
+    <div>
+      {items.map(item => (
+        <ItemComponent 
+          key={item.id}
+          item={item}
+          onClick={handleClick}
+          style={itemStyle}
+        />
+      ))}
+    </div>
+  );
+};
+```
+
+---
+
+## 📋 **Development Checklist**
+
+### **Before Starting Development**
+- [ ] Component specification written
+- [ ] Design system tokens identified
+- [ ] API integration points defined
+- [ ] State management strategy planned
+- [ ] Testing approach outlined
+
+### **During Development**
+- [ ] Follow component composition patterns
+- [ ] Implement proper error boundaries
+- [ ] Add loading and error states
+- [ ] Write unit tests for components
+- [ ] Ensure accessibility compliance
+- [ ] Optimize for performance
+
+### **Before Code Review**
+- [ ] All tests passing
+- [ ] No TypeScript errors
+- [ ] No linting errors
+- [ ] Responsive design tested
+- [ ] Accessibility tested
+- [ ] Performance optimized
+
+### **Before Deployment**
+- [ ] E2E tests passing
+- [ ] Bundle size optimized
+- [ ] SEO considerations addressed
+- [ ] Error tracking configured
+- [ ] Analytics events implemented
+
+---
+
+**Remember**: The frontend is the user's first impression of our system. Prioritize **user experience**, **performance**, and **accessibility** in every decision.
+
+*Last Updated: January 2025*

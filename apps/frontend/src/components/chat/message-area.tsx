@@ -50,14 +50,14 @@ export function MessageArea() {
     ];
 
     return (
-        <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4 max-w-4xl mx-auto">
+        <ScrollArea className="h-full">
+            <div className="p-4 pb-4 mx-auto space-y-4 max-w-4xl">
                 {messages.map((message) => (
                     <div key={message.id} className={`flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`}>
                         {message.type === "ai" && (
-                            <Avatar className="h-8 w-8 mt-1">
+                            <Avatar className="mt-1 w-8 h-8">
                                 <AvatarFallback className="bg-primary text-primary-foreground">
-                                    <Bot className="h-4 w-4" />
+                                    <Bot className="w-4 h-4" />
                                 </AvatarFallback>
                             </Avatar>
                         )}
@@ -78,9 +78,9 @@ export function MessageArea() {
                         </Card>
 
                         {message.type === "user" && (
-                            <Avatar className="h-8 w-8 mt-1">
+                            <Avatar className="mt-1 w-8 h-8">
                                 <AvatarFallback className="bg-secondary">
-                                    <User className="h-4 w-4" />
+                                    <User className="w-4 h-4" />
                                 </AvatarFallback>
                             </Avatar>
                         )}

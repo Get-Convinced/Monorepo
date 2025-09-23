@@ -1,9 +1,9 @@
 import { SidebarLayout } from "@/components/dashboard/sidebar-layout";
-import { IntroDashboard } from "@/components/dashboard/intro-dashboard";
+import { ChatInterface } from "@/components/chat/chat-interface";
 import { getAppUserSession } from "@frontegg/nextjs/app";
 import { redirect } from "next/navigation";
 
-export default async function DashboardPage() {
+export default async function ChatPage() {
     const userSession = await getAppUserSession();
 
     if (!userSession) {
@@ -12,7 +12,7 @@ export default async function DashboardPage() {
 
     return (
         <SidebarLayout>
-            <IntroDashboard />
+            <ChatInterface />
         </SidebarLayout>
     );
 }

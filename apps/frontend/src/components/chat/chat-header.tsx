@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function ChatHeader() {
     return (
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
             <Tabs defaultValue="qa" className="w-full">
                 <TabsList>
                     <TabsTrigger value="qa">Q&A</TabsTrigger>
@@ -18,7 +18,7 @@ export function ChatHeader() {
                     </TabsTrigger>
                 </TabsList>
             </Tabs>
-            <div className="flex items-center gap-2">
+            <div className="flex gap-2 items-center">
                 <Button variant="outline" size="sm">
                     Upload Files
                 </Button>
