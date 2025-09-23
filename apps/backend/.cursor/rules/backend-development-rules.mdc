@@ -1,0 +1,933 @@
+---
+description: Backend-specific development rules for Fastify API Gateway service
+globs: ["apps/backend/**/*", "src/**/*", "api/**/*", "services/**/*", "models/**/*", "auth/**/*"]
+alwaysApply: true
+---
+
+# Backend Development Rules
+
+## 🎯 **Backend-Specific Standards**
+These rules are specific to the Fastify-based API Gateway service. Follow these in addition to the common development standards.
+
+---
+
+## 🏗️ **Architecture Patterns**
+
+### **Fastify Plugin Architecture**
+```typescript
+// ✅ CORRECT - Plugin-based architecture
+export default async function userRoutes(fastify: FastifyInstance) {
+  await fastify.register(authPlugin);
+  
+  fastify.get('/users/profile', {
+    preHandler: [fastify.authenticate],
+    schema: getUserProfileSchema
+  }, getUserProfileHandler);
+}
+
+// Register plugins in main app
+await fastify.register(userRoutes, { prefix: '/api/v1' });
+```
+
+### **Service Layer Pattern**
+```typescript
+// ✅ CORRECT - Service layer for business logic
+export class UserService {
+  constructor(
+    private userRepo: UserRepository,
+    private logger: Logger
+  ) {}
+
+  async getUserProfile(userId: string): Promise<Result<UserProfile>> {
+    this.logger.info('Getting user profile', { userId });
+    
+    try {
+      const user = await this.userRepo.findById(userId);
+      if (!user) {
+        return { success: false, error: new NotFoundError('User not found') };
+      }
+      
+      return { success: true, data: this.mapToProfile(user) };
+    } catch (error) {
+      this.logger.error('Failed to get user profile', { userId, error });
+      return { success: false, error: error as Error };
+    }
+  }
+}
+```
+
+### **Repository Pattern**
+```typescript
+// ✅ CORRECT - Repository abstraction
+export interface UserRepository {
+  findById(id: string): Promise<User | null>;
+  findByEmail(email: string): Promise<User | null>;
+  create(data: CreateUserData): Promise<User>;
+  update(id: string, data: UpdateUserData): Promise<User>;
+  delete(id: string): Promise<void>;
+}
+
+export class PrismaUserRepository implements UserRepository {
+  constructor(private prisma: PrismaClient) {}
+
+  async findById(id: string): Promise<User | null> {
+    return this.prisma.user.findUnique({ where: { id } });
+  }
+  
+  // ... other methods
+}
+```
+
+---
+
+## 🔐 **Authentication & Authorization**
+
+### **Frontegg Token Verification**
+```typescript
+// ✅ CORRECT - Token verification with caching
+export class AuthService {
+  constructor(
+    private fronteggClient: FronteggClient,
+    private cache: RedisClient,
+    private logger: Logger
+  ) {}
+
+  async verifyToken(token: string): Promise<Result<AuthenticatedUser>> {
+    // Check cache first
+    const cacheKey = `auth:${this.hashToken(token)}`;
+    const cached = await this.cache.get(cacheKey);
+    
+    if (cached) {
+      return { success: true, data: JSON.parse(cached) };
+    }
+
+    // Verify with Frontegg
+    try {
+      const result = await this.fronteggClient.verifyToken(token);
+      if (!result.valid) {
+        return { success: false, error: new UnauthorizedError('Invalid token') };
+      }
+
+      const user = this.mapFronteggUser(result.user);
+      
+      // Cache for token TTL
+      await this.cache.setex(cacheKey, result.expiresIn, JSON.stringify(user));
+      
+      return { success: true, data: user };
+    } catch (error) {
+      this.logger.error('Token verification failed', { error });
+      return { success: false, error: error as Error };
+    }
+  }
+}
+```
+
+### **Authentication Plugin**
+```typescript
+// ✅ CORRECT - Fastify authentication plugin
+export const authPlugin: FastifyPluginAsync = async (fastify) => {
+  fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
+    const token = extractTokenFromHeader(request.headers.authorization);
+    
+    if (!token) {
+      throw new UnauthorizedError('Missing authorization token');
+    }
+
+    const authResult = await fastify.authService.verifyToken(token);
+    if (!authResult.success) {
+      throw authResult.error;
+    }
+
+    request.user = authResult.data;
+  });
+};
+```
+
+### **Organization Context**
+```typescript
+// ✅ CORRECT - Organization context middleware
+export const orgContextPlugin: FastifyPluginAsync = async (fastify) => {
+  fastify.addHook('preHandler', async (request) => {
+    if (request.user) {
+      const orgId = request.headers['x-organization-id'] as string;
+      
+      if (orgId && !request.user.organizations.includes(orgId)) {
+        throw new ForbiddenError('Access denied to organization');
+      }
+      
+      request.organizationId = orgId || request.user.defaultOrganization;
+    }
+  });
+};
+```
+
+---
+
+## 🗄️ **Database Operations**
+
+### **Transaction Management**
+```typescript
+// ✅ CORRECT - Transaction handling
+export class DocumentService {
+  async uploadDocument(
+    file: File, 
+    userId: string, 
+    organizationId: string
+  ): Promise<Result<Document>> {
+    return this.prisma.$transaction(async (tx) => {
+      // Create document record
+      const document = await tx.document.create({
+        data: {
+          filename: file.name,
+          size: file.size,
+          userId,
+          organizationId,
+          status: 'uploading'
+        }
+      });
+
+      // Create processing job
+      await tx.processingJob.create({
+        data: {
+          documentId: document.id,
+          type: 'document_processing',
+          status: 'pending'
+        }
+      });
+
+      // Queue background processing
+      await this.processingQueue.add('process-document', {
+        documentId: document.id,
+        filePath: file.path
+      });
+
+      return document;
+    });
+  }
+}
+```
+
+### **Query Optimization**
+```typescript
+// ✅ CORRECT - Optimized queries with includes
+export class ChatService {
+  async getChatHistory(sessionId: string, userId: string): Promise<ChatMessage[]> {
+    return this.prisma.chatMessage.findMany({
+      where: {
+        sessionId,
+        session: {
+          userId // Ensure user owns the session
+        }
+      },
+      include: {
+        citations: {
+          include: {
+            document: {
+              select: { id: true, filename: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 100 // Limit results
+    });
+  }
+}
+
+// ❌ WRONG - N+1 query problem
+const messages = await this.prisma.chatMessage.findMany({ where: { sessionId } });
+for (const message of messages) {
+  message.citations = await this.prisma.citation.findMany({
+    where: { messageId: message.id }
+  });
+}
+```
+
+---
+
+## 🔄 **API Design Standards**
+
+### **Request/Response Schema**
+```typescript
+// ✅ CORRECT - Zod schemas for validation
+export const uploadDocumentSchema = {
+  body: z.object({
+    filename: z.string().min(1).max(255),
+    size: z.number().positive().max(50 * 1024 * 1024), // 50MB limit
+    contentType: z.string().regex(/^(application\/pdf|application\/vnd\..*|text\/.*)$/),
+    metadata: z.object({
+      title: z.string().optional(),
+      description: z.string().optional()
+    }).optional()
+  }),
+  headers: z.object({
+    'x-organization-id': z.string().uuid()
+  })
+};
+
+export const uploadDocumentResponseSchema = z.object({
+  success: z.literal(true),
+  data: z.object({
+    id: z.string().uuid(),
+    filename: z.string(),
+    status: z.enum(['uploading', 'processing', 'completed', 'failed']),
+    uploadUrl: z.string().url(),
+    createdAt: z.string().datetime()
+  })
+});
+```
+
+### **Error Handling**
+```typescript
+// ✅ CORRECT - Structured error responses
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code: string,
+    public details?: Record<string, any>
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export const errorHandler: FastifyErrorHandler = (error, request, reply) => {
+  const requestId = request.id;
+  
+  if (error instanceof ApiError) {
+    return reply.status(error.statusCode).send({
+      success: false,
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        requestId
+      }
+    });
+  }
+
+  // Log unexpected errors
+  request.log.error(error, 'Unhandled error');
+  
+  return reply.status(500).send({
+    success: false,
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred',
+      requestId
+    }
+  });
+};
+```
+
+### **Response Formatting**
+```typescript
+// ✅ CORRECT - Consistent response format
+export const formatSuccessResponse = <T>(data: T, meta?: Record<string, any>) => ({
+  success: true as const,
+  data,
+  meta: {
+    timestamp: new Date().toISOString(),
+    ...meta
+  }
+});
+
+export const formatErrorResponse = (error: ApiError, requestId: string) => ({
+  success: false as const,
+  error: {
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    requestId
+  }
+});
+```
+
+---
+
+## 🚀 **Performance Optimization**
+
+### **Connection Pooling**
+```typescript
+// ✅ CORRECT - Optimized database connections
+export const createPrismaClient = () => {
+  return new PrismaClient({
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL
+      }
+    },
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error']
+  });
+};
+
+// Connection pool configuration
+const prisma = createPrismaClient().$extends({
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }) {
+        const start = Date.now();
+        const result = await query(args);
+        const end = Date.now();
+        
+        console.log(`${model}.${operation} took ${end - start}ms`);
+        return result;
+      }
+    }
+  }
+});
+```
+
+### **Caching Strategy**
+```typescript
+// ✅ CORRECT - Redis caching with TTL
+export class CacheService {
+  constructor(private redis: RedisClient) {}
+
+  async get<T>(key: string): Promise<T | null> {
+    const value = await this.redis.get(key);
+    return value ? JSON.parse(value) : null;
+  }
+
+  async set<T>(key: string, value: T, ttlSeconds: number = 3600): Promise<void> {
+    await this.redis.setex(key, ttlSeconds, JSON.stringify(value));
+  }
+
+  async invalidate(pattern: string): Promise<void> {
+    const keys = await this.redis.keys(pattern);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+}
+
+// Usage in service
+export class DocumentService {
+  async getDocument(id: string): Promise<Document | null> {
+    const cacheKey = `document:${id}`;
+    
+    // Try cache first
+    let document = await this.cache.get<Document>(cacheKey);
+    
+    if (!document) {
+      document = await this.documentRepo.findById(id);
+      if (document) {
+        await this.cache.set(cacheKey, document, 1800); // 30 minutes
+      }
+    }
+    
+    return document;
+  }
+}
+```
+
+### **Rate Limiting**
+```typescript
+// ✅ CORRECT - Rate limiting plugin
+export const rateLimitPlugin: FastifyPluginAsync = async (fastify) => {
+  await fastify.register(import('@fastify/rate-limit'), {
+    max: 100, // requests
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      return request.user?.id || request.ip;
+    },
+    errorResponseBuilder: (request, context) => ({
+      success: false,
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Rate limit exceeded, retry in ${Math.round(context.ttl / 1000)} seconds`,
+        retryAfter: Math.round(context.ttl / 1000)
+      }
+    })
+  });
+};
+```
+
+---
+
+## 🔄 **Test-Driven Development (TDD)**
+
+### **TDD Workflow**
+```typescript
+// ✅ CORRECT - TDD Cycle Example
+
+// 1. RED: Write failing test first
+describe('UserService', () => {
+  it('should return user profile when user exists', async () => {
+    // Arrange
+    const userId = 'user-123';
+    const expectedUser = { id: userId, email: 'test@example.com', name: 'Test User' };
+    mockUserRepo.findById.mockResolvedValue(expectedUser);
+
+    // Act
+    const result = await userService.getUserProfile(userId);
+
+    // Assert - This will fail initially (RED)
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.email).toBe('test@example.com');
+    }
+  });
+});
+
+// 2. GREEN: Write minimal implementation
+export class UserService {
+  async getUserProfile(userId: string): Promise<Result<UserProfile>> {
+    const user = await this.userRepo.findById(userId);
+    if (!user) {
+      return { success: false, error: new NotFoundError('User not found') };
+    }
+    return { success: true, data: this.mapToProfile(user) };
+  }
+}
+
+// 3. REFACTOR: Improve while keeping tests green
+export class UserService {
+  async getUserProfile(userId: string): Promise<Result<UserProfile>> {
+    this.logger.info('Getting user profile', { userId });
+    
+    try {
+      const user = await this.userRepo.findById(userId);
+      if (!user) {
+        return { success: false, error: new NotFoundError('User not found') };
+      }
+      
+      return { success: true, data: this.mapToProfile(user) };
+    } catch (error) {
+      this.logger.error('Failed to get user profile', { userId, error });
+      return { success: false, error: error as Error };
+    }
+  }
+}
+```
+
+### **TDD Best Practices**
+- **Start with the simplest test** that defines the behavior
+- **Write only enough code** to make the test pass
+- **Refactor continuously** while maintaining green tests
+- **Test edge cases** and error conditions early
+- **Mock external dependencies** to isolate units under test
+
+### **TDD-Friendly Architecture Patterns**
+```typescript
+// ✅ CORRECT - Dependency injection enables easy testing
+export class DocumentService {
+  constructor(
+    private documentRepo: DocumentRepository,    // Mockable
+    private processingQueue: ProcessingQueue,    // Mockable
+    private logger: Logger                       // Mockable
+  ) {}
+
+  // Pure business logic - easy to test
+  async uploadDocument(file: File, userId: string): Promise<Result<Document>> {
+    // Implementation driven by tests
+  }
+}
+
+// ✅ CORRECT - Repository pattern with interfaces
+export interface DocumentRepository {
+  findById(id: string): Promise<Document | null>;
+  create(data: CreateDocumentData): Promise<Document>;
+}
+
+// Easy to mock in tests
+export class MockDocumentRepository implements DocumentRepository {
+  private documents: Map<string, Document> = new Map();
+  
+  async findById(id: string): Promise<Document | null> {
+    return this.documents.get(id) || null;
+  }
+  
+  async create(data: CreateDocumentData): Promise<Document> {
+    const document = { id: generateId(), ...data };
+    this.documents.set(document.id, document);
+    return document;
+  }
+}
+```
+
+---
+
+## 🧪 **Testing Standards**
+
+### **Unit Testing**
+```typescript
+// ✅ CORRECT - Service unit tests
+describe('UserService', () => {
+  let userService: UserService;
+  let mockUserRepo: jest.Mocked<UserRepository>;
+  let mockLogger: jest.Mocked<Logger>;
+
+  beforeEach(() => {
+    mockUserRepo = {
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn()
+    } as any;
+    
+    mockLogger = {
+      info: jest.fn(),
+      error: jest.fn()
+    } as any;
+
+    userService = new UserService(mockUserRepo, mockLogger);
+  });
+
+  describe('getUserProfile', () => {
+    it('should return user profile when user exists', async () => {
+      // Arrange
+      const userId = 'user-123';
+      const mockUser = { id: userId, email: 'test@example.com', name: 'Test User' };
+      mockUserRepo.findById.mockResolvedValue(mockUser);
+
+      // Act
+      const result = await userService.getUserProfile(userId);
+
+      // Assert
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.id).toBe(userId);
+      }
+      expect(mockUserRepo.findById).toHaveBeenCalledWith(userId);
+    });
+
+    it('should return error when user not found', async () => {
+      // Arrange
+      const userId = 'nonexistent-user';
+      mockUserRepo.findById.mockResolvedValue(null);
+
+      // Act
+      const result = await userService.getUserProfile(userId);
+
+      // Assert
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(NotFoundError);
+      }
+    });
+  });
+});
+```
+
+### **Integration Testing**
+```typescript
+// ✅ CORRECT - API integration tests
+describe('User API', () => {
+  let app: FastifyInstance;
+  let testDb: PrismaClient;
+
+  beforeAll(async () => {
+    app = await buildApp({ logger: false });
+    testDb = new PrismaClient({
+      datasources: { db: { url: process.env.TEST_DATABASE_URL } }
+    });
+  });
+
+  beforeEach(async () => {
+    await testDb.$executeRaw`TRUNCATE TABLE users CASCADE`;
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await testDb.$disconnect();
+  });
+
+  describe('GET /api/v1/users/profile', () => {
+    it('should return user profile for authenticated user', async () => {
+      // Arrange
+      const user = await testDb.user.create({
+        data: { email: 'test@example.com', name: 'Test User' }
+      });
+      const token = generateTestToken(user);
+
+      // Act
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/users/profile',
+        headers: { authorization: `Bearer ${token}` }
+      });
+
+      // Assert
+      expect(response.statusCode).toBe(200);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(true);
+      expect(body.data.email).toBe('test@example.com');
+    });
+
+    it('should return 401 for unauthenticated request', async () => {
+      // Act
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/v1/users/profile'
+      });
+
+      // Assert
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body);
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe('UNAUTHORIZED');
+    });
+  });
+});
+```
+
+---
+
+## 📊 **Monitoring & Logging**
+
+### **Structured Logging**
+```typescript
+// ✅ CORRECT - Structured logging with correlation IDs
+export const createLogger = (service: string) => {
+  return pino({
+    name: service,
+    level: process.env.LOG_LEVEL || 'info',
+    formatters: {
+      level: (label) => ({ level: label }),
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    redact: ['password', 'token', 'authorization'] // Redact sensitive data
+  });
+};
+
+// Usage in handlers
+export const getUserProfileHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply
+) => {
+  const { id } = request.params;
+  const correlationId = request.id;
+  
+  request.log.info('Getting user profile', { userId: id, correlationId });
+  
+  const result = await request.userService.getUserProfile(id);
+  
+  if (!result.success) {
+    request.log.error('Failed to get user profile', { 
+      userId: id, 
+      error: result.error.message,
+      correlationId 
+    });
+    throw result.error;
+  }
+  
+  request.log.info('User profile retrieved successfully', { 
+    userId: id, 
+    correlationId 
+  });
+  
+  return formatSuccessResponse(result.data);
+};
+```
+
+### **Health Checks**
+```typescript
+// ✅ CORRECT - Comprehensive health checks
+export const healthCheckPlugin: FastifyPluginAsync = async (fastify) => {
+  fastify.get('/health', async (request, reply) => {
+    const checks = await Promise.allSettled([
+      checkDatabase(fastify.prisma),
+      checkRedis(fastify.redis),
+      checkFrontegg(fastify.fronteggClient),
+      checkDocumentProcessor()
+    ]);
+
+    const results = checks.map((check, index) => ({
+      name: ['database', 'redis', 'frontegg', 'document-processor'][index],
+      status: check.status === 'fulfilled' ? 'healthy' : 'unhealthy',
+      error: check.status === 'rejected' ? check.reason.message : undefined
+    }));
+
+    const healthy = results.every(result => result.status === 'healthy');
+
+    return reply
+      .status(healthy ? 200 : 503)
+      .send({
+        status: healthy ? 'healthy' : 'unhealthy',
+        timestamp: new Date().toISOString(),
+        checks: results
+      });
+  });
+};
+
+const checkDatabase = async (prisma: PrismaClient): Promise<void> => {
+  await prisma.$queryRaw`SELECT 1`;
+};
+
+const checkRedis = async (redis: RedisClient): Promise<void> => {
+  await redis.ping();
+};
+```
+
+---
+
+## 🔒 **Security Best Practices**
+
+### **Input Validation**
+```typescript
+// ✅ CORRECT - Comprehensive input validation
+export const validateInput = <T>(schema: z.ZodSchema<T>) => {
+  return (request: FastifyRequest, reply: FastifyReply, done: Function) => {
+    try {
+      const validated = schema.parse({
+        body: request.body,
+        params: request.params,
+        query: request.query,
+        headers: request.headers
+      });
+      
+      // Attach validated data to request
+      (request as any).validated = validated;
+      done();
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Invalid input data', error.errors);
+      }
+      throw error;
+    }
+  };
+};
+```
+
+### **SQL Injection Prevention**
+```typescript
+// ✅ CORRECT - Parameterized queries
+export class DocumentRepository {
+  async searchDocuments(
+    organizationId: string, 
+    searchTerm: string, 
+    limit: number = 20
+  ): Promise<Document[]> {
+    // Using Prisma (safe by default)
+    return this.prisma.document.findMany({
+      where: {
+        organizationId,
+        OR: [
+          { filename: { contains: searchTerm, mode: 'insensitive' } },
+          { content: { contains: searchTerm, mode: 'insensitive' } }
+        ]
+      },
+      take: limit,
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  // If using raw SQL, always use parameters
+  async customQuery(organizationId: string, status: string): Promise<any[]> {
+    return this.prisma.$queryRaw`
+      SELECT * FROM documents 
+      WHERE organization_id = ${organizationId} 
+      AND status = ${status}
+    `;
+  }
+}
+```
+
+---
+
+## 🚫 **Anti-Patterns to Avoid**
+
+### **Backend Anti-Patterns**
+```typescript
+// ❌ WRONG - Business logic in routes
+app.post('/documents', async (request, reply) => {
+  const file = request.body.file;
+  
+  // DON'T put business logic directly in routes
+  if (!file.name.endsWith('.pdf')) {
+    return reply.status(400).send({ error: 'Only PDF files allowed' });
+  }
+  
+  const document = await prisma.document.create({
+    data: { filename: file.name, userId: request.user.id }
+  });
+  
+  // DON'T make external API calls directly in routes
+  await fetch('http://document-processor/process', {
+    method: 'POST',
+    body: JSON.stringify({ documentId: document.id })
+  });
+  
+  return { success: true, data: document };
+});
+
+// ✅ CORRECT - Thin controllers, business logic in services
+app.post('/documents', {
+  preHandler: [fastify.authenticate, validateInput(uploadDocumentSchema)]
+}, async (request, reply) => {
+  const result = await request.documentService.uploadDocument(
+    request.validated.body,
+    request.user.id,
+    request.organizationId
+  );
+  
+  if (!result.success) {
+    throw result.error;
+  }
+  
+  return formatSuccessResponse(result.data);
+});
+```
+
+### **Database Anti-Patterns**
+```typescript
+// ❌ WRONG - N+1 queries
+const users = await prisma.user.findMany();
+for (const user of users) {
+  user.documents = await prisma.document.findMany({
+    where: { userId: user.id }
+  });
+}
+
+// ✅ CORRECT - Single query with includes
+const users = await prisma.user.findMany({
+  include: {
+    documents: true
+  }
+});
+```
+
+---
+
+## 📋 **Development Checklist**
+
+### **Before Starting Development (TDD-First Approach)**
+- [ ] **Write failing tests first** - Define expected behavior through tests
+- [ ] API specification written and reviewed
+- [ ] Database schema changes planned
+- [ ] Authentication requirements identified
+- [ ] Error handling strategy defined
+- [ ] **Test scenarios documented** - Happy path, edge cases, error conditions
+
+### **During Development (TDD Cycle)**
+- [ ] **Red**: Write failing test for next small feature
+- [ ] **Green**: Write minimal code to make test pass
+- [ ] **Refactor**: Improve code while keeping tests green
+- [ ] Follow service layer pattern
+- [ ] Implement proper error handling
+- [ ] Add input validation
+- [ ] Add structured logging
+- [ ] Implement caching where appropriate
+
+### **Before Code Review**
+- [ ] All tests passing
+- [ ] Code coverage > 80%
+- [ ] No linting errors
+- [ ] API documentation updated
+- [ ] Error scenarios tested
+- [ ] Performance considerations addressed
+
+### **Before Deployment**
+- [ ] Integration tests passing
+- [ ] Health checks implemented
+- [ ] Monitoring and alerting configured
+- [ ] Database migrations tested
+- [ ] Rollback plan prepared
+
+---
+
+**Remember**: The backend is the reliability backbone of our system. Follow **Test-Driven Development** to ensure **correctness**, prioritize **security**, and maintain **observability** in every decision.
+
+*Last Updated: January 2025*

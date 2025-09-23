@@ -1,12 +1,13 @@
+"""
+Simple FastAPI backend for testing authentication without database dependencies.
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-from .api import organization_router, user_router, file_router
-
 app = FastAPI(
     title="AI Knowledge Agent Backend",
-    description="Backend API for AI Knowledge Agent with organization, user, and file management",
+    description="Backend API for AI Knowledge Agent with Frontegg authentication",
     version="0.1.0"
 )
 
@@ -22,26 +23,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routers
-app.include_router(organization_router)
-app.include_router(user_router)
-app.include_router(file_router)
-
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "backend"}
 
-
 @app.get("/")
 async def root():
     return {
-        "service": "backend", 
+        "service": "backend",
         "env": os.getenv("APP_ENV", "local"),
         "version": "0.1.0",
         "description": "AI Knowledge Agent Backend API"
     }
-
 
 @app.get("/api/status")
 async def api_status():
@@ -51,14 +44,23 @@ async def api_status():
         "status": "healthy",
         "version": "0.1.0",
         "features": [
-            "Organization management",
-            "User management", 
-            "File upload/download with S3",
-            "Document processing integration"
+            "Frontegg authentication",
+            "CORS enabled",
+            "Health monitoring"
         ],
         "endpoints": {
-            "organizations": "/organizations",
-            "users": "/users",
-            "files": "/files"
+            "health": "/health",
+            "status": "/api/status"
         }
+    }
+
+# Simple user endpoint for testing authentication
+@app.get("/users/me")
+async def get_current_user():
+    """Mock endpoint for testing authentication."""
+    return {
+        "id": "test-user-id",
+        "email": "test@example.com",
+        "name": "Test User",
+        "message": "Authentication working! This is a mock response."
     }

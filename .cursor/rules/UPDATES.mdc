@@ -1,0 +1,134 @@
+---
+description: Development rules updates and recent changes applied to the project
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Development Rules Updates
+
+## 🔄 **Recent Changes Applied**
+
+### **Authentication Updates**
+- ✅ **Frontegg Hosted Authentication**: Updated all references to use Frontegg hosted login (hostedLoginBox: true)
+- ✅ **Frontegg Middleware**: Replaced custom ProtectedRoute components with Frontegg middleware for automatic route protection
+- ✅ **Simplified Auth Flow**: Frontend uses Frontegg middleware, backend verifies tokens and caches them
+
+### **UI Library Changes**
+- ✅ **shadcn/ui**: Replaced all ANT Design references with shadcn/ui components
+- ✅ **Design Tokens**: Integrated design.json for consistent theming across the application
+- ✅ **Radix UI**: Added Radix UI as the underlying headless component library
+- ✅ **Theme Provider**: Created custom theme provider that uses design.json tokens
+
+### **Updated Technology Stack**
+
+#### **Frontend**
+```yaml
+Before:
+  - UI Library: ANT Design + Tailwind CSS
+  - Authentication: Custom auth components + Frontegg SDK
+
+After:
+  - UI Library: shadcn/ui + Tailwind CSS
+  - Design System: design.json tokens for consistent theming
+  - Authentication: Frontegg hosted with middleware
+  - Components: Radix UI primitives via shadcn/ui
+```
+
+#### **Key Changes in Frontend Rules**
+1. **Authentication Pattern**:
+   ```typescript
+   // OLD: Custom ProtectedRoute components
+   <ProtectedRoute>
+     <DashboardLayout />
+   </ProtectedRoute>
+
+   // NEW: Frontegg middleware handles everything
+   // middleware.ts
+   export default withFronteggApp();
+   ```
+
+2. **UI Components**:
+   ```typescript
+   // OLD: ANT Design
+   import { Button, Card } from 'antd';
+
+   // NEW: shadcn/ui with design tokens
+   import { Button } from '@/components/ui/button';
+   import { Card } from '@/components/ui/card';
+   import { useTheme } from '@/components/theme-provider';
+   ```
+
+3. **Theme Management**:
+   ```typescript
+   // OLD: ANT Design ConfigProvider
+   <ConfigProvider theme={{...}}>
+
+   // NEW: Custom ThemeProvider with design.json
+   <ThemeProvider>
+     // Automatically applies design.json tokens
+   </ThemeProvider>
+   ```
+
+### **Design Token Integration**
+
+The `design.json` file provides:
+- **Color System**: Blue-based brand colors with semantic tokens
+- **Typography**: Inter font family with consistent sizing
+- **Spacing**: 4px-based spacing scale
+- **Shadows**: Consistent shadow system
+- **Border Radius**: Consistent border radius values
+- **Component Tokens**: Pre-defined component styling
+
+#### **Usage Example**:
+```typescript
+const { tokens } = useTheme();
+
+<Card 
+  style={{
+    borderRadius: tokens.components.card.radius,
+    padding: tokens.components.card.padding
+  }}
+>
+  <Badge variant="default">Status</Badge>
+</Card>
+```
+
+### **Forbidden Technologies Updated**
+- ❌ **ANT Design** (use shadcn/ui)
+- ❌ **Custom auth components** (use Frontegg middleware)
+
+### **Benefits of These Changes**
+
+1. **Simplified Authentication**:
+   - No custom auth components to maintain
+   - Automatic route protection via middleware
+   - Consistent authentication across all routes
+
+2. **Better Design System**:
+   - Consistent theming via design.json
+   - More flexible component system with shadcn/ui
+   - Better accessibility with Radix UI primitives
+
+3. **Improved Developer Experience**:
+   - Less boilerplate code for authentication
+   - Type-safe design tokens
+   - Better component composition patterns
+
+### **Migration Notes**
+
+When implementing these changes:
+
+1. **Install shadcn/ui**: Follow shadcn/ui installation guide
+2. **Setup Frontegg Middleware**: Configure middleware.ts with withFronteggApp()
+3. **Implement Theme Provider**: Create theme provider that uses design.json
+4. **Remove Custom Auth**: Remove ProtectedRoute and similar components
+5. **Update Components**: Replace ANT Design components with shadcn/ui equivalents
+
+### **Files Updated**
+- ✅ `docs/rules/development-standards.md`
+- ✅ `apps/frontend/docs/rules/frontend-development-rules.md`
+- ✅ Referenced `apps/frontend/design.json` for design specifications
+
+---
+
+*Last Updated: January 2025*

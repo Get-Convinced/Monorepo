@@ -1,0 +1,1119 @@
+---
+description: Test-Driven Development (TDD) guide for Fastify backend with Python tooling
+globs: ["apps/backend/**/*", "src/**/*", "tests/**/*"]
+alwaysApply: true
+---
+
+# Test-Driven Development (TDD) Guide
+
+## 🎯 **TDD Philosophy**
+Test-Driven Development is our primary development approach. Write tests first, implement the minimal code to pass, then refactor. This ensures **correctness**, **maintainability**, and **confidence** in our codebase.
+
+---
+
+## 🛠️ **Essential Testing Stack**
+
+### **Core Testing Framework**
+```toml
+# pyproject.toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-fail-under=80",
+    "--maxfail=1",
+    "-q"
+]
+asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (database, redis, etc.)",
+    "contract: Contract tests (API specs, external services)",
+    "e2e: End-to-end tests (full application flow)",
+    "slow: Slow tests (run separately in CI)"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "httpx",
+    # ... other deps
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "freezegun>=1.2.0",
+    "factory-boy>=3.2.0",
+    "faker>=18.0.0",
+    "httpx>=0.24.0",
+    "asgi-lifespan>=2.0.0",
+    "respx>=0.20.0",
+    "testcontainers>=3.7.0",
+    "pact-python>=2.0.0",
+    "schemathesis>=3.19.0",
+]
+dev = [
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.0.0",
+]
+```
+
+### **Testing Dependencies Explained**
+
+#### **Core Testing**
+- `pytest` + `pytest-asyncio`: Async test support for FastAPI
+- `pytest-cov`: Code coverage reporting
+- `freezegun`: Time mocking for date/time dependent tests
+- `factory-boy` + `faker`: Test data generation
+
+#### **HTTP Testing**
+- `httpx.AsyncClient`: In-process FastAPI testing
+- `asgi-lifespan`: Ensures startup/shutdown events run in tests
+- FastAPI's `dependency_overrides`: Inject test doubles
+
+#### **External Service Mocking**
+- `respx`: Mock HTTP calls (async-safe, works with httpx)
+- `responses`: Alternative for requests-based code
+
+#### **Contract Testing**
+- `schemathesis`: Property-based testing against OpenAPI specs
+- `pact-python`: Consumer-Driven Contract testing
+- `prism`: Mock server from OpenAPI specs
+
+#### **Infrastructure Testing**
+- `testcontainers`: Real Postgres/Redis/etc. in Docker containers
+- SQLite in-memory: Ultra-fast database tests
+
+---
+
+## 📁 **TDD-Optimized Folder Structure**
+
+```
+apps/backend/
+├── src/
+│   ├── api/                    # FastAPI routers
+│   │   ├── __init__.py
+│   │   ├── auth.py            # Authentication routes
+│   │   ├── documents.py       # Document management routes
+│   │   └── chat.py            # Chat/RAG routes
+│   ├── services/              # Domain logic (pure business logic)
+│   │   ├── __init__.py
+│   │   ├── auth_service.py    # Frontegg integration
+│   │   ├── document_service.py # Document processing
+│   │   └── chat_service.py    # RAG/chat logic
+│   ├── adapters/              # External service clients
+│   │   ├── __init__.py
+│   │   ├── frontegg_client.py # Frontegg HTTP client
+│   │   ├── document_processor_client.py
+│   │   └── vector_db_client.py
+│   ├── models/                # Domain models
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── document.py
+│   │   └── chat.py
+│   ├── schemas/               # Pydantic request/response models
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── documents.py
+│   │   └── chat.py
+│   ├── deps.py               # FastAPI dependency providers
+│   ├── main.py               # FastAPI app factory
+│   ├── settings.py           # Configuration
+│   └── exceptions.py         # Custom exceptions
+├── tests/
+│   ├── unit/                 # Fast, isolated tests
+│   │   ├── services/
+│   │   │   ├── test_auth_service.py
+│   │   │   ├── test_document_service.py
+│   │   │   └── test_chat_service.py
+│   │   ├── adapters/
+│   │   │   ├── test_frontegg_client.py
+│   │   │   └── test_document_processor_client.py
+│   │   └── models/
+│   │       ├── test_user.py
+│   │       └── test_document.py
+│   ├── api/                  # FastAPI route tests (in-process)
+│   │   ├── test_auth_routes.py
+│   │   ├── test_document_routes.py
+│   │   └── test_chat_routes.py
+│   ├── contracts/            # Contract tests
+│   │   ├── pact/
+│   │   │   └── test_frontegg_pact.py
+│   │   └── openapi/
+│   │       └── test_document_processor_spec.py
+│   ├── integration/          # Real infrastructure tests
+│   │   ├── test_database_operations.py
+│   │   └── test_redis_caching.py
+│   ├── e2e/                  # End-to-end smoke tests
+│   │   └── test_document_upload_flow.py
+│   ├── fixtures/             # Test data files
+│   │   ├── sample.pdf
+│   │   └── test_responses.json
+│   └── conftest.py           # Global test configuration
+├── openapi/                  # API specifications
+│   └── document-processor.yaml
+└── pyproject.toml
+```
+
+---
+
+## 🔄 **TDD Workflow**
+
+### **1. Red-Green-Refactor Cycle**
+
+```python
+# ✅ STEP 1: RED - Write failing test first
+# tests/unit/services/test_document_service.py
+
+import pytest
+from unittest.mock import Mock, AsyncMock
+from src.services.document_service import DocumentService
+from src.models.document import Document, DocumentStatus
+from src.exceptions import DocumentProcessingError
+
+class TestDocumentService:
+    @pytest.fixture
+    def mock_document_processor_client(self):
+        return AsyncMock()
+    
+    @pytest.fixture
+    def mock_vector_db_client(self):
+        return AsyncMock()
+    
+    @pytest.fixture
+    def document_service(self, mock_document_processor_client, mock_vector_db_client):
+        return DocumentService(
+            document_processor=mock_document_processor_client,
+            vector_db=mock_vector_db_client
+        )
+    
+    @pytest.mark.asyncio
+    async def test_upload_document_success(self, document_service, mock_document_processor_client):
+        # Arrange
+        file_data = b"sample pdf content"
+        user_id = "user-123"
+        organization_id = "org-456"
+        
+        mock_document_processor_client.process_document.return_value = {
+            "document_id": "doc-789",
+            "status": "processing"
+        }
+        
+        # Act - This will fail initially (RED)
+        result = await document_service.upload_document(file_data, user_id, organization_id)
+        
+        # Assert
+        assert result.success is True
+        assert result.data.id == "doc-789"
+        assert result.data.status == DocumentStatus.PROCESSING
+        mock_document_processor_client.process_document.assert_called_once()
+```
+
+```python
+# ✅ STEP 2: GREEN - Write minimal implementation
+# src/services/document_service.py
+
+from typing import Optional
+from src.adapters.document_processor_client import DocumentProcessorClient
+from src.adapters.vector_db_client import VectorDBClient
+from src.models.document import Document, DocumentStatus
+from src.schemas.common import Result
+
+class DocumentService:
+    def __init__(
+        self,
+        document_processor: DocumentProcessorClient,
+        vector_db: VectorDBClient
+    ):
+        self.document_processor = document_processor
+        self.vector_db = vector_db
+    
+    async def upload_document(
+        self, 
+        file_data: bytes, 
+        user_id: str, 
+        organization_id: str
+    ) -> Result[Document]:
+        # Minimal implementation to make test pass
+        response = await self.document_processor.process_document(
+            file_data=file_data,
+            user_id=user_id,
+            organization_id=organization_id
+        )
+        
+        document = Document(
+            id=response["document_id"],
+            status=DocumentStatus.PROCESSING,
+            user_id=user_id,
+            organization_id=organization_id
+        )
+        
+        return Result(success=True, data=document)
+```
+
+```python
+# ✅ STEP 3: REFACTOR - Improve while keeping tests green
+# src/services/document_service.py (enhanced)
+
+import logging
+from typing import Optional
+from src.adapters.document_processor_client import DocumentProcessorClient
+from src.adapters.vector_db_client import VectorDBClient
+from src.models.document import Document, DocumentStatus
+from src.schemas.common import Result
+from src.exceptions import DocumentProcessingError
+
+logger = logging.getLogger(__name__)
+
+class DocumentService:
+    def __init__(
+        self,
+        document_processor: DocumentProcessorClient,
+        vector_db: VectorDBClient
+    ):
+        self.document_processor = document_processor
+        self.vector_db = vector_db
+    
+    async def upload_document(
+        self, 
+        file_data: bytes, 
+        user_id: str, 
+        organization_id: str,
+        metadata: Optional[dict] = None
+    ) -> Result[Document]:
+        logger.info(
+            "Starting document upload",
+            extra={
+                "user_id": user_id,
+                "organization_id": organization_id,
+                "file_size": len(file_data)
+            }
+        )
+        
+        try:
+            # Validate file size
+            if len(file_data) > 50 * 1024 * 1024:  # 50MB limit
+                return Result(
+                    success=False,
+                    error=DocumentProcessingError("File too large")
+                )
+            
+            # Process document
+            response = await self.document_processor.process_document(
+                file_data=file_data,
+                user_id=user_id,
+                organization_id=organization_id,
+                metadata=metadata or {}
+            )
+            
+            document = Document(
+                id=response["document_id"],
+                status=DocumentStatus.PROCESSING,
+                user_id=user_id,
+                organization_id=organization_id,
+                filename=response.get("filename"),
+                metadata=metadata
+            )
+            
+            logger.info(
+                "Document upload successful",
+                extra={
+                    "document_id": document.id,
+                    "user_id": user_id
+                }
+            )
+            
+            return Result(success=True, data=document)
+            
+        except Exception as e:
+            logger.error(
+                "Document upload failed",
+                extra={
+                    "user_id": user_id,
+                    "error": str(e)
+                }
+            )
+            return Result(
+                success=False,
+                error=DocumentProcessingError(f"Upload failed: {str(e)}")
+            )
+```
+
+---
+
+## 🧪 **Testing Patterns by Layer**
+
+### **Unit Tests (Fast, Isolated)**
+
+```python
+# tests/unit/services/test_auth_service.py
+import pytest
+from unittest.mock import AsyncMock, Mock
+from freezegun import freeze_time
+from datetime import datetime, timedelta
+
+from src.services.auth_service import AuthService
+from src.adapters.frontegg_client import FronteggClient
+from src.models.user import User
+from src.exceptions import AuthenticationError
+
+class TestAuthService:
+    @pytest.fixture
+    def mock_frontegg_client(self):
+        return AsyncMock(spec=FronteggClient)
+    
+    @pytest.fixture
+    def mock_cache(self):
+        cache = AsyncMock()
+        cache.get.return_value = None  # Default: cache miss
+        return cache
+    
+    @pytest.fixture
+    def auth_service(self, mock_frontegg_client, mock_cache):
+        return AuthService(
+            frontegg_client=mock_frontegg_client,
+            cache=mock_cache
+        )
+    
+    @pytest.mark.asyncio
+    async def test_verify_token_success_with_cache_miss(
+        self, 
+        auth_service, 
+        mock_frontegg_client, 
+        mock_cache
+    ):
+        # Arrange
+        token = "valid-jwt-token"
+        user_data = {
+            "id": "user-123",
+            "email": "test@example.com",
+            "organizations": ["org-456"]
+        }
+        
+        mock_cache.get.return_value = None  # Cache miss
+        mock_frontegg_client.verify_token.return_value = {
+            "valid": True,
+            "user": user_data,
+            "expires_in": 3600
+        }
+        
+        # Act
+        result = await auth_service.verify_token(token)
+        
+        # Assert
+        assert result.success is True
+        assert result.data.id == "user-123"
+        assert result.data.email == "test@example.com"
+        
+        # Verify caching behavior
+        mock_cache.get.assert_called_once()
+        mock_cache.setex.assert_called_once()
+        mock_frontegg_client.verify_token.assert_called_once_with(token)
+    
+    @pytest.mark.asyncio
+    async def test_verify_token_success_with_cache_hit(
+        self, 
+        auth_service, 
+        mock_frontegg_client, 
+        mock_cache
+    ):
+        # Arrange
+        token = "valid-jwt-token"
+        cached_user = {
+            "id": "user-123",
+            "email": "test@example.com",
+            "organizations": ["org-456"]
+        }
+        
+        mock_cache.get.return_value = json.dumps(cached_user)
+        
+        # Act
+        result = await auth_service.verify_token(token)
+        
+        # Assert
+        assert result.success is True
+        assert result.data.id == "user-123"
+        
+        # Verify Frontegg was not called (cache hit)
+        mock_frontegg_client.verify_token.assert_not_called()
+    
+    @freeze_time("2024-01-15 12:00:00")
+    @pytest.mark.asyncio
+    async def test_verify_token_expired(self, auth_service, mock_frontegg_client):
+        # Arrange
+        token = "expired-jwt-token"
+        mock_frontegg_client.verify_token.return_value = {
+            "valid": False,
+            "error": "Token expired"
+        }
+        
+        # Act
+        result = await auth_service.verify_token(token)
+        
+        # Assert
+        assert result.success is False
+        assert isinstance(result.error, AuthenticationError)
+        assert "expired" in str(result.error).lower()
+```
+
+### **API Tests (In-Process FastAPI)**
+
+```python
+# tests/api/test_document_routes.py
+import pytest
+from httpx import AsyncClient
+from asgi_lifespan import LifespanManager
+from unittest.mock import AsyncMock
+
+from src.main import create_app
+from src.deps import get_document_service, get_auth_service
+from src.services.document_service import DocumentService
+from src.services.auth_service import AuthService
+from src.models.document import Document, DocumentStatus
+from src.schemas.common import Result
+
+class TestDocumentRoutes:
+    @pytest.fixture
+    async def mock_document_service(self):
+        return AsyncMock(spec=DocumentService)
+    
+    @pytest.fixture
+    async def mock_auth_service(self):
+        service = AsyncMock(spec=AuthService)
+        # Default: valid authentication
+        service.verify_token.return_value = Result(
+            success=True,
+            data=User(id="user-123", email="test@example.com")
+        )
+        return service
+    
+    @pytest.fixture
+    async def app(self, mock_document_service, mock_auth_service):
+        app = create_app()
+        
+        # Override dependencies with mocks
+        app.dependency_overrides[get_document_service] = lambda: mock_document_service
+        app.dependency_overrides[get_auth_service] = lambda: mock_auth_service
+        
+        return app
+    
+    @pytest.fixture
+    async def client(self, app):
+        async with LifespanManager(app):
+            async with AsyncClient(
+                app=app, 
+                base_url="http://testserver"
+            ) as client:
+                yield client
+    
+    @pytest.mark.asyncio
+    async def test_upload_document_success(
+        self, 
+        client, 
+        mock_document_service
+    ):
+        # Arrange
+        mock_document_service.upload_document.return_value = Result(
+            success=True,
+            data=Document(
+                id="doc-123",
+                status=DocumentStatus.PROCESSING,
+                user_id="user-123",
+                organization_id="org-456"
+            )
+        )
+        
+        # Act
+        response = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("test.pdf", b"fake pdf content", "application/pdf")},
+            headers={
+                "Authorization": "Bearer valid-token",
+                "X-Organization-ID": "org-456"
+            }
+        )
+        
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["data"]["id"] == "doc-123"
+        assert data["data"]["status"] == "processing"
+        
+        # Verify service was called correctly
+        mock_document_service.upload_document.assert_called_once()
+        call_args = mock_document_service.upload_document.call_args
+        assert call_args[1]["user_id"] == "user-123"
+        assert call_args[1]["organization_id"] == "org-456"
+    
+    @pytest.mark.asyncio
+    async def test_upload_document_unauthorized(
+        self, 
+        client, 
+        mock_auth_service
+    ):
+        # Arrange
+        mock_auth_service.verify_token.return_value = Result(
+            success=False,
+            error=AuthenticationError("Invalid token")
+        )
+        
+        # Act
+        response = await client.post(
+            "/api/v1/documents/upload",
+            files={"file": ("test.pdf", b"fake pdf content", "application/pdf")},
+            headers={"Authorization": "Bearer invalid-token"}
+        )
+        
+        # Assert
+        assert response.status_code == 401
+        data = response.json()
+        assert data["success"] is False
+        assert data["error"]["code"] == "UNAUTHORIZED"
+```
+
+### **Contract Tests (External APIs)**
+
+```python
+# tests/contracts/pact/test_frontegg_pact.py
+import pytest
+from pact import Consumer, Provider
+from src.adapters.frontegg_client import FronteggClient
+
+# Consumer-Driven Contract test for Frontegg API
+pact = Consumer('ai-knowledge-agent').has_pact_with(Provider('frontegg-api'))
+
+class TestFronteggContract:
+    @pytest.mark.asyncio
+    async def test_verify_token_contract(self):
+        # Define expected interaction
+        (pact
+         .given('a valid JWT token exists')
+         .upon_receiving('a token verification request')
+         .with_request(
+             method='POST',
+             path='/identity/resources/auth/v1/user/token/verify',
+             headers={'Authorization': 'Bearer valid-token'},
+             body={}
+         )
+         .will_respond_with(
+             status=200,
+             headers={'Content-Type': 'application/json'},
+             body={
+                 'valid': True,
+                 'user': {
+                     'id': 'user-123',
+                     'email': 'test@example.com',
+                     'tenantIds': ['org-456']
+                 },
+                 'expiresIn': 3600
+             }
+         ))
+        
+        with pact:
+            # Test the actual client
+            client = FronteggClient(base_url=pact.uri, api_key="test-key")
+            result = await client.verify_token("valid-token")
+            
+            assert result['valid'] is True
+            assert result['user']['id'] == 'user-123'
+```
+
+### **Integration Tests (Real Infrastructure)**
+
+```python
+# tests/integration/test_database_operations.py
+import pytest
+from testcontainers.postgres import PostgresContainer
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from src.models.base import Base
+from src.repositories.document_repository import DocumentRepository
+from src.models.document import Document
+
+class TestDocumentRepository:
+    @pytest.fixture(scope="class")
+    def postgres_container(self):
+        with PostgresContainer("postgres:15") as postgres:
+            yield postgres
+    
+    @pytest.fixture
+    def db_session(self, postgres_container):
+        engine = create_engine(postgres_container.get_connection_url())
+        Base.metadata.create_all(engine)
+        
+        SessionLocal = sessionmaker(bind=engine)
+        session = SessionLocal()
+        
+        yield session
+        
+        session.close()
+    
+    @pytest.fixture
+    def document_repository(self, db_session):
+        return DocumentRepository(session=db_session)
+    
+    @pytest.mark.integration
+    async def test_create_and_retrieve_document(self, document_repository):
+        # Arrange
+        document_data = {
+            "filename": "test.pdf",
+            "user_id": "user-123",
+            "organization_id": "org-456",
+            "status": "processing"
+        }
+        
+        # Act
+        created_doc = await document_repository.create(document_data)
+        retrieved_doc = await document_repository.get_by_id(created_doc.id)
+        
+        # Assert
+        assert retrieved_doc is not None
+        assert retrieved_doc.filename == "test.pdf"
+        assert retrieved_doc.user_id == "user-123"
+        assert retrieved_doc.status == "processing"
+```
+
+---
+
+## 🔧 **Test Configuration & Fixtures**
+
+### **Global Test Configuration**
+
+```python
+# tests/conftest.py
+import pytest
+import asyncio
+from typing import AsyncGenerator
+from httpx import AsyncClient
+from asgi_lifespan import LifespanManager
+from unittest.mock import AsyncMock
+
+from src.main import create_app
+from src.settings import get_settings
+from src.deps import (
+    get_document_service,
+    get_auth_service,
+    get_frontegg_client,
+    get_vector_db_client
+)
+
+# Test settings
+@pytest.fixture(scope="session")
+def test_settings():
+    return get_settings(
+        database_url="sqlite:///test.db",
+        redis_url="redis://localhost:6379/1",
+        frontegg_api_key="test-key",
+        environment="test"
+    )
+
+# FastAPI app with test configuration
+@pytest.fixture
+async def app(test_settings):
+    app = create_app(settings=test_settings)
+    return app
+
+# HTTP client for API testing
+@pytest.fixture
+async def client(app) -> AsyncGenerator[AsyncClient, None]:
+    async with LifespanManager(app):
+        async with AsyncClient(
+            app=app,
+            base_url="http://testserver"
+        ) as client:
+            yield client
+
+# Mock services (can be overridden in specific tests)
+@pytest.fixture
+def mock_document_service():
+    return AsyncMock()
+
+@pytest.fixture
+def mock_auth_service():
+    service = AsyncMock()
+    # Default successful auth
+    service.verify_token.return_value = Result(
+        success=True,
+        data=User(id="test-user", email="test@example.com")
+    )
+    return service
+
+@pytest.fixture
+def mock_frontegg_client():
+    return AsyncMock()
+
+@pytest.fixture
+def mock_vector_db_client():
+    return AsyncMock()
+
+# Authenticated client (for tests requiring auth)
+@pytest.fixture
+async def authenticated_client(client, mock_auth_service):
+    # Override auth service to always return success
+    client.app.dependency_overrides[get_auth_service] = lambda: mock_auth_service
+    return client
+
+# Test data factories
+@pytest.fixture
+def document_factory():
+    from tests.factories import DocumentFactory
+    return DocumentFactory
+
+@pytest.fixture
+def user_factory():
+    from tests.factories import UserFactory
+    return UserFactory
+```
+
+### **Test Data Factories**
+
+```python
+# tests/factories.py
+import factory
+from faker import Faker
+from datetime import datetime
+from src.models.document import Document, DocumentStatus
+from src.models.user import User
+
+fake = Faker()
+
+class UserFactory(factory.Factory):
+    class Meta:
+        model = User
+    
+    id = factory.LazyFunction(lambda: fake.uuid4())
+    email = factory.LazyFunction(lambda: fake.email())
+    name = factory.LazyFunction(lambda: fake.name())
+    organizations = factory.LazyFunction(lambda: [fake.uuid4()])
+    created_at = factory.LazyFunction(lambda: datetime.utcnow())
+
+class DocumentFactory(factory.Factory):
+    class Meta:
+        model = Document
+    
+    id = factory.LazyFunction(lambda: fake.uuid4())
+    filename = factory.LazyFunction(lambda: f"{fake.word()}.pdf")
+    user_id = factory.LazyFunction(lambda: fake.uuid4())
+    organization_id = factory.LazyFunction(lambda: fake.uuid4())
+    status = DocumentStatus.PROCESSING
+    size = factory.LazyFunction(lambda: fake.random_int(min=1000, max=1000000))
+    created_at = factory.LazyFunction(lambda: datetime.utcnow())
+    metadata = factory.LazyFunction(lambda: {"category": fake.word()})
+```
+
+---
+
+## 🚀 **Running Tests**
+
+### **Local Development**
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test types
+pytest -m unit                    # Unit tests only
+pytest -m integration            # Integration tests only
+pytest -m "not slow"             # Exclude slow tests
+
+# Run with coverage
+pytest --cov=src --cov-report=html
+
+# Run specific test file
+pytest tests/unit/services/test_document_service.py
+
+# Run specific test method
+pytest tests/unit/services/test_document_service.py::TestDocumentService::test_upload_document_success
+
+# Run tests in parallel (install pytest-xdist)
+pytest -n auto
+
+# Watch mode (install pytest-watch)
+ptw
+```
+
+### **CI/CD Pipeline**
+
+```yaml
+# .github/workflows/test.yml
+name: Tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.11, 3.12]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test,dev]"
+    
+    - name: Lint with ruff
+      run: ruff check src tests
+    
+    - name: Type check with mypy
+      run: mypy src
+    
+    - name: Run unit tests
+      run: pytest -m unit --cov=src --cov-report=xml
+    
+    - name: Run integration tests
+      run: pytest -m integration
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/1
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+```
+
+---
+
+## 📊 **Coverage & Quality Gates**
+
+### **Coverage Configuration**
+
+```ini
+# .coveragerc
+[run]
+source = src
+omit = 
+    */tests/*
+    */migrations/*
+    */venv/*
+    */conftest.py
+    */settings.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+
+[html]
+directory = htmlcov
+```
+
+### **Quality Gates**
+
+```python
+# pyproject.toml quality settings
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.per-file-ignores]
+"tests/**/*" = ["S101"]  # Allow assert in tests
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+```
+
+---
+
+## 🎯 **TDD Best Practices**
+
+### **1. Test Naming Convention**
+```python
+# ✅ GOOD - Descriptive test names
+def test_upload_document_should_return_processing_status_when_file_is_valid()
+def test_verify_token_should_raise_auth_error_when_token_is_expired()
+def test_search_documents_should_filter_by_organization_when_org_id_provided()
+
+# ❌ BAD - Vague test names
+def test_upload()
+def test_auth()
+def test_search()
+```
+
+### **2. AAA Pattern (Arrange-Act-Assert)**
+```python
+@pytest.mark.asyncio
+async def test_document_service_upload_success():
+    # Arrange - Set up test data and mocks
+    file_data = b"test content"
+    user_id = "user-123"
+    mock_processor = AsyncMock()
+    mock_processor.process_document.return_value = {"document_id": "doc-456"}
+    
+    service = DocumentService(document_processor=mock_processor)
+    
+    # Act - Execute the behavior being tested
+    result = await service.upload_document(file_data, user_id)
+    
+    # Assert - Verify the expected outcome
+    assert result.success is True
+    assert result.data.id == "doc-456"
+    mock_processor.process_document.assert_called_once_with(
+        file_data=file_data,
+        user_id=user_id
+    )
+```
+
+### **3. Test One Thing at a Time**
+```python
+# ✅ GOOD - Single responsibility per test
+async def test_upload_document_validates_file_size():
+    # Test only file size validation
+    pass
+
+async def test_upload_document_calls_processor():
+    # Test only processor integration
+    pass
+
+async def test_upload_document_handles_processor_error():
+    # Test only error handling
+    pass
+
+# ❌ BAD - Testing multiple behaviors
+async def test_upload_document_everything():
+    # Tests validation, processing, error handling all in one
+    pass
+```
+
+### **4. Use Test Doubles Appropriately**
+```python
+# ✅ GOOD - Mock external dependencies
+@pytest.fixture
+def mock_external_service():
+    return AsyncMock(spec=ExternalService)
+
+# ✅ GOOD - Use real objects for value objects
+def test_document_creation():
+    document = Document(
+        id="doc-123",
+        filename="test.pdf",
+        status=DocumentStatus.PROCESSING
+    )
+    assert document.is_processing()
+
+# ❌ BAD - Mocking value objects unnecessarily
+def test_document_creation_with_mock():
+    mock_document = Mock()
+    mock_document.is_processing.return_value = True
+    # This doesn't test the real Document behavior
+```
+
+---
+
+## 🔍 **Debugging Test Failures**
+
+### **Common Patterns**
+
+```python
+# Debugging async tests
+@pytest.mark.asyncio
+async def test_with_debugging():
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    
+    # Your test code here
+    result = await service.method()
+    
+    # Add breakpoint for debugging
+    import pdb; pdb.set_trace()
+
+# Capturing logs in tests
+def test_with_log_capture(caplog):
+    with caplog.at_level(logging.INFO):
+        service.method()
+    
+    assert "Expected log message" in caplog.text
+
+# Testing with real time vs frozen time
+@freeze_time("2024-01-15 12:00:00")
+def test_time_dependent_behavior():
+    # Test behavior at specific time
+    pass
+```
+
+---
+
+**Remember**: TDD is not just about testing—it's about **design**. Let your tests drive you toward **simple**, **testable**, and **maintainable** code architecture.
+
+*Last Updated: January 2025*

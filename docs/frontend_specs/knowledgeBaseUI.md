@@ -1,214 +1,324 @@
-This is a comprehensive **Knowledge Sources/Files Management** interface with sophisticated file organization capabilities. The screenshots reveal a **data table-centric design** with advanced filtering, search, and status management features.[1][2]
+# **Knowledge Sources Management - Implementation Specification**
 
-Perfect! Now I have a complete picture of the upload functionality. This reveals a sophisticated **multi-modal file management system** with drag-and-drop capabilities, URL input, and integration options.[1][2]
+This specification outlines a **modern file management interface** built with shadcn/ui components, focusing on file upload, organization, and integration capabilities.
 
-## **Updated File Upload Specification**
+## **Core File Management Architecture**
 
-### **Upload Modal Architecture**
+### **Main Layout Structure**
 
-**Modal Structure:**
-```jsx
-<Modal
-  title="Upload Files"
-  width={800}
-  open={uploadModalVisible}
-  onCancel={handleModalClose}
-  footer={null}
->
-  <Tabs defaultActiveKey="files">
-    <TabPane tab="Files" key="files">
-      <FileUploadSection />
-    </TabPane>
-    <TabPane tab="Web URLs" key="urls">
-      <URLInputSection />
-    </TabPane>
-    <TabPane tab="Integrations" key="integrations">
-      <IntegrationSection />
-    </TabPane>
-  </Tabs>
-</Modal>
+**Primary Components:**
+- **File Browser**: Hierarchical file and folder structure
+- **Upload Interface**: Drag-and-drop file upload with progress tracking
+- **Search & Filter**: Real-time content discovery
+- **Integration Cards**: Visual status of connected services
+
+**Layout Structure:**
+```
+Knowledge Sources
+├── Header
+│   ├── Page Title
+│   ├── Upload Button
+│   └── Search Bar
+├── Content Tabs
+│   ├── Files Tab
+│   ├── URLs Tab
+│   └── Integrations Tab
+├── File Browser
+│   ├── Folder Tree
+│   ├── File List
+│   └── File Details
+└── Action Panel
+    ├── Upload Zone
+    ├── Integration Status
+    └── Bulk Actions
 ```
 
-### **File Upload Tab Implementation**
+## **File Upload Implementation**
 
-**Drag-and-Drop Upload Area:**
-```jsx
-<Upload.Dragger
-  name="files"
-  multiple={true}
-  accept=".pdf,.doc,.docx,.txt,.xlsx,.ppt,.pptx"
-  customRequest={handleFileUpload}
-  showUploadList={false}
->
-  <div className="upload-content">
-    <InboxOutlined className="upload-icon" />
-    <p className="ant-upload-text">
-      Drag files here to upload
-    </p>
-    <p className="ant-upload-hint">
-      Supports: PDF, DOC, DOCX, TXT, XLS, PPT
-    </p>
-    <Button type="primary" icon={<UploadOutlined />}>
+### **Upload Modal Component**
+```tsx
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+export function UploadModal({ open, onOpenChange }: UploadModalProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Upload Files</DialogTitle>
+        </DialogHeader>
+        <Tabs defaultValue="files" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="files">Files</TabsTrigger>
+            <TabsTrigger value="urls">Web URLs</TabsTrigger>
+            <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          </TabsList>
+          <TabsContent value="files">
+      <FileUploadSection />
+          </TabsContent>
+          <TabsContent value="urls">
+      <URLInputSection />
+          </TabsContent>
+          <TabsContent value="integrations">
+      <IntegrationSection />
+          </TabsContent>
+  </Tabs>
+      </DialogContent>
+    </Dialog>
+  )
+}
+```
+
+### **File Upload Section Component**
+```tsx
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Upload, FileText, Image, File } from "lucide-react"
+
+export function FileUploadSection() {
+  return (
+    <div className="space-y-4">
+      <Card className="border-2 border-dashed border-muted-foreground/25">
+        <CardContent className="flex flex-col items-center justify-center p-8">
+          <Upload className="h-12 w-12 text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Drag files here to upload</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Supports: PDF, DOC, DOCX, TXT, XLS, PPT, Images
+          </p>
+          <Button>
+            <Upload className="h-4 w-4 mr-2" />
       Choose Files
     </Button>
+        </CardContent>
+      </Card>
+      
+      <div className="grid grid-cols-3 gap-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <FileText className="h-4 w-4" />
+          Documents
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Image className="h-4 w-4" />
+          Images
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <File className="h-4 w-4" />
+          Other Files
+        </div>
+      </div>
   </div>
-</Upload.Dragger>
+  )
+}
 ```
 
-**Supported File Types Display:**
-- **Document Types**: PDF, DOC, DOCX for text documents
-- **Spreadsheets**: XLS, XLSX for data files  
-- **Presentations**: PPT, PPTX for presentation materials
-- **Plain Text**: TXT files for simple text content[3][4]
+### **Supported File Types**
+- **Documents**: PDF, DOC, DOCX, TXT
+- **Spreadsheets**: XLS, XLSX, CSV
+- **Presentations**: PPT, PPTX
+- **Images**: JPG, PNG, GIF, SVG
+- **Other**: JSON, XML, MD
 
-**Advanced Upload Features:**
-- **Multiple File Selection**: Batch upload capability[1]
-- **File Size Validation**: Maximum file size limits with beforeUpload validation[3]
-- **File Type Restriction**: Accept only specified formats[2]
-- **Progress Tracking**: Real-time upload progress indicators[1]
-- **Error Handling**: Upload failure recovery and retry mechanisms
+### **Upload Features**
+- **Drag & Drop**: Direct file dropping into upload area
+- **Multiple Selection**: Batch upload capability
+- **Progress Tracking**: Real-time upload progress
+- **File Validation**: Size and type restrictions
+- **Error Handling**: Upload failure recovery
 
-### **Web URLs Tab Specification**
+### **URL Input Section Component**
+```tsx
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Globe } from "lucide-react"
 
-**URL Input Interface:**
-```jsx
-<Form onFinish={handleURLSubmit}>
-  <Form.Item
-    name="url"
-    rules={[
-      { required: true, message: "Please enter a URL" },
-      { type: "url", message: "Please enter a valid URL" },
-      { pattern: /^https?:\/\//, message: "URL must start with http:// or https://" }
-    ]}
-  >
+export function URLInputSection() {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Add Web URL</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="url">Website URL</Label>
+            <div className="relative">
+              <Globe className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
     <Input
-      placeholder="Enter URL (e.g., https://example.com/document.pdf)"
-      prefix={<GlobalOutlined />}
-      size="large"
-    />
-  </Form.Item>
-  <Form.Item>
-    <Button type="primary" htmlType="submit" block>
+                id="url"
+                placeholder="https://example.com/document.pdf"
+                className="pl-10"
+              />
+            </div>
+          </div>
+          <Button className="w-full">
       Add URL
     </Button>
-  </Form.Item>
-</Form>
+        </CardContent>
+      </Card>
+      
+      <div className="text-sm text-muted-foreground">
+        <p>Supported formats:</p>
+        <ul className="list-disc list-inside mt-2 space-y-1">
+          <li>Web pages and articles</li>
+          <li>PDF documents</li>
+          <li>Documentation sites</li>
+          <li>Knowledge bases</li>
+        </ul>
+      </div>
+    </div>
+  )
+}
 ```
 
-**URL Processing Features:**
-- **URL Validation**: Comprehensive validation for proper URL format[5][6]
-- **Protocol Support**: HTTP and HTTPS protocol validation[5]
+### **URL Processing Features**
+- **URL Validation**: Comprehensive validation for proper URL format
+- **Protocol Support**: HTTP and HTTPS protocol validation
 - **Content Extraction**: Automatic content fetching and indexing
 - **Preview Generation**: URL preview with metadata extraction
 - **Duplicate Detection**: Prevention of duplicate URL entries
 
-### **Integrations Tab Architecture**
+### **Integration Section Component**
+```tsx
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Cloud, Database, FileText } from "lucide-react"
 
-**Integration Grid Layout:**
-```jsx
-<Row gutter={[16, 16]}>
-  <Col span={8}>
-    <Card 
-      hoverable
-      className="integration-card"
-      onClick={() => handleIntegration('google-drive')}
-    >
-      <GoogleDriveIcon />
-      <h4>Google Drive</h4>
-      <p>Connect your Google Drive account</p>
-      <Badge status={googleDriveStatus} text={connectionText} />
+export function IntegrationSection() {
+  const integrations = [
+    {
+      name: "Google Drive",
+      description: "Connect your Google Drive account",
+      icon: Cloud,
+      status: "connected",
+      connected: true
+    },
+    {
+      name: "Microsoft OneDrive",
+      description: "Sync with OneDrive files",
+      icon: Cloud,
+      status: "available",
+      connected: false
+    },
+    {
+      name: "Notion",
+      description: "Import from Notion workspace",
+      icon: Database,
+      status: "available",
+      connected: false
+    }
+  ]
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {integrations.map((integration) => (
+        <Card key={integration.name} className="cursor-pointer hover:shadow-md transition-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <integration.icon className="h-6 w-6 text-muted-foreground" />
+                <div>
+                  <CardTitle className="text-base">{integration.name}</CardTitle>
+                </div>
+              </div>
+              <Badge variant={integration.connected ? "default" : "secondary"}>
+                {integration.status}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-sm text-muted-foreground mb-3">
+              {integration.description}
+            </p>
+            <Button 
+              variant={integration.connected ? "outline" : "default"}
+              size="sm"
+              className="w-full"
+            >
+              {integration.connected ? "Manage" : "Connect"}
+            </Button>
+          </CardContent>
     </Card>
-  </Col>
-  <Col span={8}>
-    <Card hoverable className="integration-card">
-      <OneDriveIcon />
-      <h4>Microsoft OneDrive</h4>
-      <p>Sync with OneDrive files</p>
-    </Card>
-  </Col>
-  <Col span={8}>
-    <Card hoverable className="integration-card">
-      <DropboxIcon />
-      <h4>Dropbox</h4>
-      <p>Import from Dropbox storage</p>
-    </Card>
-  </Col>
-</Row>
-```
-
-**Available Integrations:**
-- **Google Drive**: Primary cloud storage integration shown in screenshots
-- **Microsoft OneDrive**: Enterprise cloud storage option
-- **Dropbox**: Alternative cloud storage solution
-- **Box**: Business cloud storage platform
-- **SharePoint**: Microsoft enterprise document management
-- **Notion**: Knowledge base integration
-- **Confluence**: Atlassian wiki integration
-
-**Integration Management:**
-- **OAuth Authentication**: Secure connection establishment
-- **Permission Scopes**: Read-only or read-write access levels
-- **Sync Status Indicators**: Connection health and sync status[7]
-- **Folder Selection**: Choose specific folders for synchronization
-- **Auto-sync Configuration**: Scheduled synchronization settings
-
-### **Enhanced Upload State Management**
-
-**Upload State Schema:**
-```typescript
-interface UploadState {
-  files: {
-    uploading: UploadFile[];
-    completed: FileRecord[];
-    failed: UploadFile[];
-  };
-  urls: {
-    processing: string[];
-    completed: URLRecord[];
-    failed: string[];
-  };
-  integrations: {
-    connected: Integration[];
-    syncing: Integration[];
-    errors: IntegrationError[];
-  };
-  modal: {
-    visible: boolean;
-    activeTab: 'files' | 'urls' | 'integrations';
-  };
+      ))}
+    </div>
+  )
 }
 ```
 
-**Clipboard Paste Support:**
-- **Image Paste**: Direct paste from clipboard for images[2]
-- **File Paste**: Support for copied files from file explorer
-- **Text Content**: Automatic text file creation from pasted content
-- **Multiple Format Handling**: Various clipboard content types
+### **Available Integrations**
+- **Google Drive**: Primary cloud storage integration
+- **Microsoft OneDrive**: Enterprise cloud storage option
+- **Dropbox**: Alternative cloud storage solution
+- **Notion**: Knowledge base integration
+- **Confluence**: Atlassian wiki integration
+- **SharePoint**: Microsoft enterprise document management
 
-This comprehensive specification creates a **enterprise-grade file management system** with multiple upload methods, extensive integration capabilities, and robust validation mechanisms for professional AI chat applications.[4][2][1]
+### **Integration Features**
+- **OAuth Authentication**: Secure connection establishment
+- **Permission Scopes**: Read-only or read-write access levels
+- **Sync Status Indicators**: Connection health and sync status
+- **Folder Selection**: Choose specific folders for synchronization
+- **Auto-sync Configuration**: Scheduled synchronization settings
 
-[1](https://ant.design/components/upload/)
-[2](https://reunico.com/en/blog/ant-design-upload-custom-interface/)
-[3](https://www.youtube.com/watch?v=WwYcXR99j_4)
-[4](https://www.geeksforgeeks.org/reactjs/reactjs-ui-ant-design-upload-component/)
-[5](https://stackoverflow.com/questions/57073932/how-validate-a-url-in-ant-design-using-getfiledecoder)
-[6](https://codesandbox.io/s/antd-react-url-input-https-validation-c1zgo)
-[7](https://ant.design/components/badge/)
-[8](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/82515454/1234bd42-6413-4e2c-afee-1a4d41ea7c26/Screenshot-2025-09-13-at-17.32.49.jpg)
-[9](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/82515454/6a1f0f05-4f9d-437f-8cb1-5ae735dc7ae1/Screenshot-2025-09-13-at-17.33.47.jpg)
-[10](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/82515454/4ab2072f-fdfc-427a-9f43-d9f8bbcf242b/Screenshot-2025-09-13-at-17.43.28.jpg?AWSAccessKeyId=ASIA2F3EMEYE6H76EDAX&Signature=WE0U0e60rfgZ0SNZpdcxTHOvh88%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEMz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQDM9SoZOaHXUUHp6L79WAAS1fC9Cw7HOVZimxuOvQfOeQIhAPrBYsQBUx86t41nqAqIPoUb0RRvs1cBLEnqqLG3TmWGKvEECEUQARoMNjk5NzUzMzA5NzA1IgzAwd8ZKZ8oOORVDZMqzgRpdLib0stYtPNDM6gbswYLqRxBIJBzWd7QiSOHJLwiwGtW1ex6GKUQ0UCG60dtEKJ3ck1gqEZ9nPD8igUgzZlQv8kXQDjohPOPxvgyKnaa6%2B4ONbjP15sYyQMhUfgjUianx1IY8hj53c%2FZ82WA3QPVcCJRYqfceKeyb%2FxkfZYuxTpLguHaOkNfuWiyBWKgfhqpt6qVUVCiJpO1tZdFiSpoOScf7JvSnWB1Sja5HOeMGG9wbvwdQ1Ghn3VJ%2Bzf0m3x1Y6iIHsdwXngQGSZI%2FW7yTVeScexIBIR%2FTEiPMNjuSdgdcY39up%2F1m5xRHWLBbnLYJY78BdhY4Zmasys%2BbEY%2FfI0RAWsarjSdXdvy4%2FMMa5aiROvpl9%2BMMuTmOnsPz8IPpgmn%2BvvbEdIBcn7VD1ECF8333ySewsqy%2FDGGsZaEXXib7lnyfiXfjLqz%2FlRfpgXCtU2VAblFIjxMmhHrBL1L%2BUjMOSsdE%2F6Rj2qqiTe5ARxArsxKk0wUcaK%2FB0R7cyNZZpy8OXeVOpWyYMRBvfd2qFrt0tLCbyr8pcNXQQtMA%2FDO3iP5BF1bIaug%2B8mzQfWqNtBNEU4DlDeypyugEzi9%2Bfzc0zlJgPtZVpf%2Bco4uPOLt7DXgND0V0fw5OoxiWTu0WmBBD%2F5I6B2O4FCi1QWs17hc3WjMWUHd3Zrpk1BhYbott%2Frwl563xpHb%2BxAuYLPOsBzwFgNntnqkxcrBpCwxx39vYYyvOXwwXF8qo4E4fmP8GRaVGDHwtrYkpqKd1f4P8j5dv9Ph72j44T4JMzDLuZXGBjqZAdED9nbL7SyG1%2B8QiotRpl83ODSXLtOdbGr7995EN5mcx1I8O8U0RsfSTDuF2DtmrwPav54T4Z21UV%2FXNfW0ob0Gyc%2FMJdEeqOsk7yk830rgnNkC7XgF%2FV%2FJgVbySWH7I%2BOW%2FOH4AwA6mTXLVnttZxNK9JooVVyNaIvyuZqV2AgKks43golcP1IsfPZSm2F7wB0l54nkgPZ5rg%3D%3D&Expires=1757766372)
-[11](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/82515454/54fa052d-919a-4803-8e2e-5b5575c1b3cb/Screenshot-2025-09-13-at-17.43.08.jpg?AWSAccessKeyId=ASIA2F3EMEYE6H76EDAX&Signature=JqadjaY74hSfVNOhFjT0y4I6pVY%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEMz%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQDM9SoZOaHXUUHp6L79WAAS1fC9Cw7HOVZimxuOvQfOeQIhAPrBYsQBUx86t41nqAqIPoUb0RRvs1cBLEnqqLG3TmWGKvEECEUQARoMNjk5NzUzMzA5NzA1IgzAwd8ZKZ8oOORVDZMqzgRpdLib0stYtPNDM6gbswYLqRxBIJBzWd7QiSOHJLwiwGtW1ex6GKUQ0UCG60dtEKJ3ck1gqEZ9nPD8igUgzZlQv8kXQDjohPOPxvgyKnaa6%2B4ONbjP15sYyQMhUfgjUianx1IY8hj53c%2FZ82WA3QPVcCJRYqfceKeyb%2FxkfZYuxTpLguHaOkNfuWiyBWKgfhqpt6qVUVCiJpO1tZdFiSpoOScf7JvSnWB1Sja5HOeMGG9wbvwdQ1Ghn3VJ%2Bzf0m3x1Y6iIHsdwXngQGSZI%2FW7yTVeScexIBIR%2FTEiPMNjuSdgdcY39up%2F1m5xRHWLBbnLYJY78BdhY4Zmasys%2BbEY%2FfI0RAWsarjSdXdvy4%2FMMa5aiROvpl9%2BMMuTmOnsPz8IPpgmn%2BvvbEdIBcn7VD1ECF8333ySewsqy%2FDGGsZaEXXib7lnyfiXfjLqz%2FlRfpgXCtU2VAblFIjxMmhHrBL1L%2BUjMOSsdE%2F6Rj2qqiTe5ARxArsxKk0wUcaK%2FB0R7cyNZZpy8OXeVOpWyYMRBvfd2qFrt0tLCbyr8pcNXQQtMA%2FDO3iP5BF1bIaug%2B8mzQfWqNtBNEU4DlDeypyugEzi9%2Bfzc0zlJgPtZVpf%2Bco4uPOLt7DXgND0V0fw5OoxiWTu0WmBBD%2F5I6B2O4FCi1QWs17hc3WjMWUHd3Zrpk1BhYbott%2Frwl563xpHb%2BxAuYLPOsBzwFgNntnqkxcrBpCwxx39vYYyvOXwwXF8qo4E4fmP8GRaVGDHwtrYkpqKd1f4P8j5dv9Ph72j44T4JMzDLuZXGBjqZAdED9nbL7SyG1%2B8QiotRpl83ODSXLtOdbGr7995EN5mcx1I8O8U0RsfSTDuF2DtmrwPav54T4Z21UV%2FXNfW0ob0Gyc%2FMJdEeqOsk7yk830rgnNkC7XgF%2FV%2FJgVbySWH7I%2BOW%2FOH4AwA6mTXLVnttZxNK9JooVVyNaIvyuZqV2AgKks43golcP1IsfPZSm2F7wB0l54nkgPZ5rg%3D%3D&Expires=1757766372)
-[12](https://stackoverflow.com/questions/70782042/ant-design-file-upload-drag-and-drop-not-working-properly)
-[13](https://antdv.com/components/upload)
-[14](https://blog.filestack.com/react-file-upload-tutorial-filestack/)
-[15](https://codesandbox.io/s/file-upload-modal-box-react-p4bcib)
-[16](https://www.youtube.com/watch?v=ajp8hmAKEhM)
-[17](https://antblazor.com/en-US/components/upload)
-[18](https://mui.com/material-ui/react-modal/)
-[19](https://ant.design/components/input/)
-[20](https://gary-shen.github.io/ant-design/components/upload/)
-[21](https://stackoverflow.com/questions/61690969/unable-to-show-a-popup-of-choose-file-while-clicking-on-upload-file-in-reactjs)
-[22](https://ant.design/components/form/)
-[23](https://github.com/ant-design/ant-design/issues/16463)
-[24](https://blog.logrocket.com/creating-reusable-pop-up-modal-react/)
-[25](https://www.antforfigma.com/components/upload)
+## **State Management**
+
+### **File Management State**
+```typescript
+interface FileManagementState {
+  files: {
+    uploading: File[]
+    completed: FileRecord[]
+    failed: File[]
+  }
+  urls: {
+    processing: string[]
+    completed: URLRecord[]
+    failed: string[]
+  }
+  integrations: {
+    connected: Integration[]
+    syncing: Integration[]
+    errors: IntegrationError[]
+  }
+  modal: {
+    visible: boolean
+    activeTab: 'files' | 'urls' | 'integrations'
+  }
+}
+
+interface FileRecord {
+  id: string
+  name: string
+  type: string
+  size: number
+  uploadedAt: Date
+  status: 'processing' | 'completed' | 'failed'
+}
+```
+
+## **Implementation Priority**
+
+1. **File Upload Modal**: Basic upload interface with drag & drop
+2. **File Browser**: Display uploaded files with status
+3. **URL Input**: Web URL addition and processing
+4. **Integration Cards**: Connect external services
+5. **Search & Filter**: Find and organize content
+
+## **Key Features**
+
+### **File Upload**
+- **Drag & Drop**: Direct file dropping into upload area
+- **Multiple Selection**: Batch upload capability
+- **Progress Tracking**: Real-time upload progress
+- **File Validation**: Size and type restrictions
+- **Error Handling**: Upload failure recovery
+
+### **Content Management**
+- **File Organization**: Hierarchical folder structure
+- **Search & Discovery**: Find content across all sources
+- **Status Tracking**: Processing and completion status
+- **Bulk Operations**: Multi-file management actions
+
+This specification provides a **focused implementation roadmap** for building a modern file management interface with shadcn/ui components, prioritizing core upload functionality and content organization.

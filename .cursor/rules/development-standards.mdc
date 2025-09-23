@@ -1,0 +1,527 @@
+---
+description: Core development standards and rules for the AI Knowledge Agent monorepo
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Development Standards & Rules
+
+## 🎯 **Project Philosophy**
+As a principal engineer, these rules ensure consistency, maintainability, and scalability across our AI Knowledge Agent monorepo. Every decision should prioritize **developer experience**, **system reliability**, and **long-term maintainability**.
+
+---
+
+## 📚 **Technology Stack Standards**
+
+### **Approved Technologies**
+```yaml
+Frontend:
+  - Framework: Next.js 14+ (App Router ONLY)
+  - UI Library: shadcn/ui + Tailwind CSS
+  - Design System: design.json tokens for consistent theming
+  - State Management: Zustand (preferred) or Redux Toolkit
+  - HTTP Client: Axios with interceptors
+  - Authentication: Frontegg hosted with middleware
+  - Testing: Jest + React Testing Library + Playwright
+
+Backend:
+  - Framework: Fastify with TypeScript
+  - ORM: Prisma (preferred) or Drizzle
+  - Validation: Zod
+  - Authentication: Frontegg token verification with caching
+  - Testing: Jest + Supertest
+
+Document Processor:
+  - Framework: FastAPI with Python 3.11+
+  - Validation: Pydantic v2
+  - Queue: RQ with Redis
+  - Testing: pytest + pytest-asyncio
+
+Common:
+  - Package Manager: pnpm (Node.js), uv (Python)
+  - Containerization: Docker + Docker Compose
+  - CI/CD: GitHub Actions
+  - Monitoring: Structured logging with correlation IDs
+```
+
+### **Forbidden Technologies**
+❌ **DO NOT USE:**
+- Create React App (use Next.js)
+- Express.js (use Fastify)
+- npm or yarn (use pnpm)
+- pip (use uv for Python)
+- Class components in React (use functional components)
+- Default exports (use named exports)
+- ANT Design (use shadcn/ui)
+- Custom auth components (use Frontegg middleware)
+
+---
+
+## 🏗️ **Architecture Patterns**
+
+### **Mandatory Design Patterns**
+
+#### **1. Repository Pattern**
+```typescript
+// ✅ CORRECT
+interface UserRepository {
+  findById(id: string): Promise<User | null>;
+  create(data: CreateUserData): Promise<User>;
+  update(id: string, data: UpdateUserData): Promise<User>;
+}
+
+// ❌ WRONG - Direct database calls in business logic
+const user = await prisma.user.findUnique({ where: { id } });
+```
+
+#### **2. Service Layer Pattern**
+```typescript
+// ✅ CORRECT - Business logic in services
+class DocumentService {
+  constructor(
+    private documentRepo: DocumentRepository,
+    private processingQueue: ProcessingQueue
+  ) {}
+
+  async uploadDocument(file: File, userId: string): Promise<Document> {
+    // Business logic here
+  }
+}
+```
+
+#### **3. Factory Pattern for Providers**
+```python
+# ✅ CORRECT - Python example
+class EmbeddingProviderFactory:
+    @staticmethod
+    def create(provider_type: str) -> EmbeddingProvider:
+        if provider_type == "ollama":
+            return OllamaProvider()
+        elif provider_type == "openai":
+            return OpenAIProvider()
+        raise ValueError(f"Unknown provider: {provider_type}")
+```
+
+### **Error Handling Standards**
+
+#### **Result Pattern (Preferred)**
+```typescript
+// ✅ CORRECT - Use Result pattern for error handling
+type Result<T, E = Error> = 
+  | { success: true; data: T }
+  | { success: false; error: E };
+
+async function processDocument(file: File): Promise<Result<Document>> {
+  try {
+    const document = await documentService.process(file);
+    return { success: true, data: document };
+  } catch (error) {
+    return { success: false, error: error as Error };
+  }
+}
+```
+
+#### **Custom Error Classes**
+```typescript
+// ✅ CORRECT - Structured error hierarchy
+class AppError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public statusCode: number = 500
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+class ValidationError extends AppError {
+  constructor(message: string) {
+    super(message, 'VALIDATION_ERROR', 400);
+  }
+}
+```
+
+---
+
+## 🧪 **Testing Standards**
+
+### **Testing Pyramid Requirements**
+```
+E2E Tests (10%)     ← Playwright, critical user journeys
+Integration (20%)   ← API endpoints, service interactions  
+Unit Tests (70%)    ← Pure functions, business logic
+```
+
+### **Mandatory Test Coverage**
+- **Minimum Coverage**: 80% for all services
+- **Critical Paths**: 95% coverage required
+- **New Features**: 100% coverage required
+
+### **Test Structure Standards**
+```typescript
+// ✅ CORRECT - AAA Pattern (Arrange, Act, Assert)
+describe('DocumentService', () => {
+  describe('uploadDocument', () => {
+    it('should process valid PDF document successfully', async () => {
+      // Arrange
+      const mockFile = createMockPDF();
+      const userId = 'user-123';
+      const expectedDocument = { id: 'doc-456', status: 'processing' };
+      
+      // Act
+      const result = await documentService.uploadDocument(mockFile, userId);
+      
+      // Assert
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.status).toBe('processing');
+      }
+    });
+  });
+});
+```
+
+### **Test Naming Convention**
+```typescript
+// ✅ CORRECT
+it('should return 401 when user is not authenticated')
+it('should process PDF document and create embeddings')
+it('should handle concurrent upload requests without race conditions')
+
+// ❌ WRONG
+it('test upload')
+it('should work')
+it('upload test case')
+```
+
+---
+
+## 📝 **Code Style & Standards**
+
+### **TypeScript/JavaScript Rules**
+```typescript
+// ✅ CORRECT - Functional programming preferred
+const processDocuments = (documents: Document[]) =>
+  documents
+    .filter(doc => doc.status === 'pending')
+    .map(doc => processDocument(doc));
+
+// ❌ WRONG - Imperative style
+function processDocuments(documents: Document[]) {
+  const result = [];
+  for (let i = 0; i < documents.length; i++) {
+    if (documents[i].status === 'pending') {
+      result.push(processDocument(documents[i]));
+    }
+  }
+  return result;
+}
+```
+
+### **Python Rules**
+```python
+# ✅ CORRECT - Type hints mandatory
+async def process_document(
+    file_path: Path, 
+    user_id: str,
+    options: ProcessingOptions | None = None
+) -> ProcessingResult:
+    """Process a document and return the result.
+    
+    Args:
+        file_path: Path to the document file
+        user_id: ID of the user uploading the document
+        options: Optional processing configuration
+        
+    Returns:
+        ProcessingResult with success status and metadata
+        
+    Raises:
+        ProcessingError: If document processing fails
+    """
+    pass
+
+# ❌ WRONG - No type hints
+def process_document(file_path, user_id, options=None):
+    pass
+```
+
+### **Naming Conventions**
+```typescript
+// ✅ CORRECT
+const API_BASE_URL = 'https://api.example.com';  // Constants: SCREAMING_SNAKE_CASE
+const userService = new UserService();           // Variables: camelCase
+class DocumentProcessor {}                       // Classes: PascalCase
+interface UserRepository {}                      // Interfaces: PascalCase
+type ProcessingResult = {};                      // Types: PascalCase
+
+// File names
+user-service.ts          // kebab-case for files
+UserProfile.tsx          // PascalCase for React components
+```
+
+---
+
+## 🔄 **Git & Development Workflow**
+
+### **Branch Strategy**
+```bash
+# Single branch development (as requested)
+main  # ← All development happens here
+```
+
+### **Commit Message Standards**
+```bash
+# ✅ CORRECT - Conventional Commits
+feat(auth): add Frontegg token verification
+fix(rag): resolve embedding dimension mismatch
+docs(api): update authentication endpoints
+test(upload): add integration tests for file processing
+refactor(db): extract user repository pattern
+
+# ❌ WRONG
+fixed bug
+update
+changes
+wip
+```
+
+### **Pull Request Requirements**
+1. **Description**: Clear description of changes and reasoning
+2. **Testing**: All tests pass + new tests for new features
+3. **Documentation**: Update relevant docs
+4. **Breaking Changes**: Clearly marked and documented
+5. **Performance**: No performance regressions
+
+---
+
+## 📊 **Performance Standards**
+
+### **Frontend Performance**
+- **Core Web Vitals**: LCP < 2.5s, FID < 100ms, CLS < 0.1
+- **Bundle Size**: Main bundle < 250KB gzipped
+- **Code Splitting**: Route-based splitting mandatory
+- **Image Optimization**: Next.js Image component required
+
+### **Backend Performance**
+- **API Response Time**: P95 < 500ms for standard endpoints
+- **Database Queries**: N+1 queries forbidden
+- **Memory Usage**: < 512MB per service container
+- **Connection Pooling**: Required for all database connections
+
+### **Document Processing Performance**
+- **Processing Speed**: > 1 document per minute per worker
+- **Memory Efficiency**: < 1GB RAM per processing job
+- **Queue Processing**: < 30 second job pickup time
+- **Error Rate**: < 1% processing failure rate
+
+---
+
+## 🔒 **Security Standards**
+
+### **Authentication & Authorization**
+```typescript
+// ✅ CORRECT - Always validate tokens
+const authenticateUser = async (token: string): Promise<User | null> => {
+  const result = await fronteggService.verifyToken(token);
+  if (!result.success) {
+    return null;
+  }
+  return result.user;
+};
+
+// ❌ WRONG - Never trust client data
+const user = JSON.parse(request.headers['user-data']); // NEVER DO THIS
+```
+
+### **Data Validation**
+```typescript
+// ✅ CORRECT - Validate all inputs
+const uploadSchema = z.object({
+  file: z.instanceof(File),
+  organizationId: z.string().uuid(),
+  metadata: z.object({
+    title: z.string().min(1).max(255),
+    description: z.string().optional()
+  })
+});
+
+const validateUpload = (data: unknown) => uploadSchema.parse(data);
+```
+
+### **Sensitive Data Handling**
+- **Environment Variables**: All secrets in environment variables
+- **Logging**: Never log passwords, tokens, or PII
+- **Database**: Encrypt sensitive fields at rest
+- **API Keys**: Rotate regularly, never commit to code
+
+---
+
+## 📋 **Documentation Requirements**
+
+### **Code Documentation**
+```typescript
+/**
+ * Processes a document and generates embeddings
+ * 
+ * @param document - The document to process
+ * @param options - Processing configuration options
+ * @returns Promise resolving to processing result with embeddings
+ * 
+ * @throws {ProcessingError} When document format is unsupported
+ * @throws {EmbeddingError} When embedding generation fails
+ * 
+ * @example
+ * ```typescript
+ * const result = await processDocument(pdfFile, { 
+ *   chunkSize: 1000,
+ *   overlap: 200 
+ * });
+ * ```
+ */
+async function processDocument(
+  document: Document, 
+  options: ProcessingOptions
+): Promise<ProcessingResult> {
+  // Implementation
+}
+```
+
+### **API Documentation**
+- **OpenAPI/Swagger**: Required for all REST endpoints
+- **Examples**: Include request/response examples
+- **Error Codes**: Document all possible error responses
+- **Rate Limits**: Document rate limiting policies
+
+---
+
+## 🚀 **Deployment & Operations**
+
+### **Environment Configuration**
+```typescript
+// ✅ CORRECT - Environment-specific configs
+const config = {
+  development: {
+    database: {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      ssl: false
+    }
+  },
+  production: {
+    database: {
+      host: process.env.DB_HOST!, // Required in production
+      port: parseInt(process.env.DB_PORT!),
+      ssl: true
+    }
+  }
+};
+```
+
+### **Health Checks**
+```typescript
+// ✅ CORRECT - Comprehensive health checks
+app.get('/health', async (request, reply) => {
+  const checks = await Promise.allSettled([
+    checkDatabase(),
+    checkRedis(),
+    checkExternalServices()
+  ]);
+  
+  const healthy = checks.every(check => check.status === 'fulfilled');
+  
+  return reply
+    .status(healthy ? 200 : 503)
+    .send({
+      status: healthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      checks: checks.map(formatHealthCheck)
+    });
+});
+```
+
+---
+
+## ⚡ **Development Productivity Rules**
+
+### **IDE Configuration**
+- **ESLint**: Mandatory, no warnings allowed in production
+- **Prettier**: Auto-format on save
+- **TypeScript**: Strict mode enabled
+- **Import Organization**: Auto-sort imports
+
+### **Development Scripts**
+```json
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --fix",
+    "type-check": "tsc --noEmit"
+  }
+}
+```
+
+### **Pre-commit Hooks**
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: lint
+        name: ESLint
+        entry: pnpm lint
+        language: system
+      - id: type-check
+        name: TypeScript
+        entry: pnpm type-check
+        language: system
+      - id: test
+        name: Tests
+        entry: pnpm test
+        language: system
+```
+
+---
+
+## 🎯 **Success Metrics**
+
+### **Code Quality Metrics**
+- **Test Coverage**: > 80% overall, > 95% for critical paths
+- **Type Coverage**: > 95% TypeScript coverage
+- **Lint Errors**: Zero tolerance policy
+- **Code Duplication**: < 3% duplicate code
+
+### **Performance Metrics**
+- **Build Time**: < 2 minutes for full build
+- **Test Suite**: < 30 seconds for unit tests
+- **Hot Reload**: < 1 second for development changes
+- **Bundle Analysis**: Weekly bundle size monitoring
+
+---
+
+## 🚫 **Anti-Patterns to Avoid**
+
+### **Code Anti-Patterns**
+❌ **God Objects**: Classes with > 10 methods
+❌ **Deep Nesting**: > 3 levels of nesting
+❌ **Magic Numbers**: Use named constants
+❌ **Callback Hell**: Use async/await
+❌ **Premature Optimization**: Profile before optimizing
+
+### **Architecture Anti-Patterns**
+❌ **Tight Coupling**: Services directly importing each other
+❌ **Circular Dependencies**: Import cycles between modules
+❌ **Shared Mutable State**: Global state mutations
+❌ **Database in UI**: Direct database calls from frontend
+❌ **Business Logic in Controllers**: Keep controllers thin
+
+---
+
+**Remember**: These rules exist to ensure our codebase remains maintainable, scalable, and enjoyable to work with. When in doubt, prioritize **clarity over cleverness** and **consistency over personal preference**.
+
+*Last Updated: January 2025*

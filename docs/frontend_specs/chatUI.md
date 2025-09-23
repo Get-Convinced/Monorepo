@@ -1,104 +1,193 @@
-Key Interface Elements Revealed
-Left Sidebar Enhancements:
+# **AI Chat Interface - Implementation Specification**
 
-Conversation History: Complete list of previous conversations with clear titles
+This specification outlines a **modern AI chat interface** built with shadcn/ui components, focusing on core chat functionality and file integration.
 
-Search Functionality: Built-in search bar for finding specific conversations
+## **Core Chat Interface Architecture**
 
-Organization Tabs: "Library" and "Collections" tabs for content organization
+### **Main Layout Structure**
 
-Time-based Grouping: "LAST 7 DAYS" section for recent conversation organization
+**Primary Components:**
+- **Chat Header**: Context tabs and user actions
+- **Message Area**: Scrollable conversation history
+- **Input Area**: Text input with file attachment support
+- **Sidebar**: Conversation history and quick actions
 
-Document Integration: Shows "Product Document" and "RFP" file types with document icons
+**Layout Structure:**
+```
+Chat Interface
+├── Header
+│   ├── Context Tabs (Q&A, Docs, RFP)
+│   └── User Profile & Actions
+├── Main Content
+│   ├── Message History
+│   ├── Suggested Prompts
+│   └── Input Area
+└── Sidebar
+    ├── Recent Conversations
+    └── Quick Actions
+```
 
-Main Content Area Updates:
+### **Key Interface Elements**
 
-Tabbed Interface: Three distinct tabs - "Q&A", "Docs", and "RFP" with potential badge indicators
+**Chat Header:**
+- **Context Tabs**: Q&A (active), Docs (disabled), RFP (disabled)
+- **User Avatar**: Profile access and settings
+- **File Upload Button**: Quick access to file upload
 
-Suggested Prompts Grid: 2x2 card layout showing suggested questions in clickable cards
+**Message Area:**
+- **Conversation History**: Scrollable message list with timestamps
+- **Message Types**: User messages, AI responses, system messages
+- **File Attachments**: Inline display of uploaded files
+- **Suggested Prompts**: 2x2 grid of conversation starters
 
-User Avatar: Profile image in top-right corner for personalization
+## **Component Implementation**
 
-Contextual Input: Shows shortcut instruction "⌘+ENTER TO ASK" for power users
+### **Chat Header Component**
+```tsx
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-Revised Component Architecture
-Enhanced Sidebar Structure:
+export function ChatHeader() {
+  return (
+    <div className="flex items-center justify-between p-4 border-b">
+      <Tabs defaultValue="qa" className="w-full">
+        <TabsList>
+          <TabsTrigger value="qa">Q&A</TabsTrigger>
+          <TabsTrigger value="docs" disabled>Docs</TabsTrigger>
+          <TabsTrigger value="rfp" disabled>RFP</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm">
+          Upload Files
+        </Button>
+        <Avatar>
+          <AvatarImage src="/user-avatar.jpg" />
+          <AvatarFallback>U</AvatarFallback>
+        </Avatar>
+      </div>
+    </div>
+  )
+}
+```
 
-jsx
-<Layout.Sider width={300}>
-  <div className="sidebar-header">
-    <Tabs defaultActiveKey="library">
-      <TabPane tab="Library" key="library" />
-      <TabPane tab="Collections" key="collections" />
-    </Tabs>
-  </div>
-  <Input.Search placeholder="Search" />
-  <div className="conversation-history">
-    <Typography.Text type="secondary">LAST 7 DAYS</Typography.Text>
-    {/* Conversation list */}
-  </div>
-</Layout.Sider>
-Main Content Layout:
+### **Message Area Component**
+```tsx
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Card, CardContent } from "@/components/ui/card"
 
-jsx
-<Layout.Content>
-  <div className="header">
-    <Tabs defaultActiveKey="qa">
-      <TabPane tab="Q&A" key="qa" />
-      <TabPane tab="Docs" key="docs" />
-      <TabPane tab="RFP" key="rfp" />
-    </Tabs>
-    <Avatar src="user-profile.jpg" />
-  </div>
-  <div className="suggestion-grid">
-    <Row gutter={[16, 16]}>
-      <Col span={12}>
-        <Card hoverable>Suggested Question 1</Card>
-      </Col>
-      <Col span={12}>
-        <Card hoverable>Suggested Question 2</Card>
-      </Col>
-    </Row>
-  </div>
-</Layout.Content>
-New Component Requirements
-Suggestion Cards Implementation:
+export function MessageArea() {
+  return (
+    <ScrollArea className="flex-1 p-4">
+      <div className="space-y-4">
+        {/* Message components */}
+        <div className="flex justify-end">
+          <Card className="max-w-[80%]">
+            <CardContent className="p-3">
+              <p>User message content</p>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="flex justify-start">
+          <Card className="max-w-[80%]">
+            <CardContent className="p-3">
+              <p>AI response content</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </ScrollArea>
+  )
+}
+```
 
-Card Grid Layout: Using ANT Design's 2x2 grid system for suggested prompts
+### **Input Area Component**
+```tsx
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { Paperclip, Send } from "lucide-react"
 
-Interactive Cards: Clickable cards that trigger conversation starters
+export function InputArea() {
+  return (
+    <div className="p-4 border-t">
+      <div className="flex gap-2">
+        <Button variant="outline" size="icon">
+          <Paperclip className="h-4 w-4" />
+        </Button>
+        <Textarea 
+          placeholder="Type your message... (⌘+Enter to send)"
+          className="flex-1 min-h-[60px]"
+        />
+        <Button size="icon">
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+```
 
-Hover Effects: Visual feedback for better user experience
+### **Suggested Prompts Component**
+```tsx
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
-Responsive Design: Cards adapt to screen size changes
+export function SuggestedPrompts() {
+  const prompts = [
+    "Analyze the uploaded document",
+    "Summarize key findings",
+    "Create a proposal outline",
+    "Generate questions for review"
+  ]
 
-Document Integration Features:
+  return (
+    <div className="grid grid-cols-2 gap-4 p-4">
+      {prompts.map((prompt, index) => (
+        <Card key={index} className="cursor-pointer hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">{prompt}</p>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+```
 
-File Type Icons: Visual indicators for different document types (PDF, DOCX, etc.)
+## **File Integration Features**
 
-Document Preview: Quick access to referenced materials
+### **File Upload Integration**
+- **Drag & Drop**: Support for dragging files directly into chat
+- **File Attachments**: Inline display of uploaded files in messages
+- **File Types**: Support for PDF, DOC, DOCX, TXT, images
+- **File Preview**: Quick preview of attached files
 
-Context Switching: Seamless transition between chat and document modes
+### **State Management**
+```tsx
+interface ChatState {
+  messages: Message[]
+  activeTab: 'qa' | 'docs' | 'rfp'
+  attachedFiles: File[]
+  isLoading: boolean
+}
 
-Enhanced Navigation:
+interface Message {
+  id: string
+  type: 'user' | 'ai' | 'system'
+  content: string
+  timestamp: Date
+  attachments?: File[]
+}
+```
 
-Tab-based Organization: Primary navigation using tabs for different content types
+## **Implementation Priority**
 
-Badge System: Notification indicators for unread items or updates
+1. **Core Chat Interface**: Basic message display and input
+2. **File Upload**: Drag & drop and attachment support
+3. **Context Tabs**: Q&A, Docs, RFP functionality
+4. **Suggested Prompts**: Conversation starters
+5. **Advanced Features**: Search, history, keyboard shortcuts
 
-Search Integration: Real-time search across conversations and documents
+This specification provides a **focused implementation roadmap** for building a modern AI chat interface with shadcn/ui components, prioritizing core chat functionality and file integration.
 
-Keyboard Shortcuts: Power user features like ⌘+Enter for quick actions
-
-Updated State Management
-Additional State Requirements:
-
-Active Tab State: Tracking current tab (Q&A, Docs, RFP)
-
-Document Context: Managing loaded documents and their metadata
-
-Suggestion State: Dynamic loading of contextual prompt suggestions
-
-Search State: Managing search queries and results filtering
-
-This updated specification now accurately reflects the enterprise-level AI chat interface with sophisticated document management, organized navigation, and intelligent prompt suggestions that make it suitable for professional workflows

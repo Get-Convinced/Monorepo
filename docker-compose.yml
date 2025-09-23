@@ -6,7 +6,7 @@ services:
         environment:
             POSTGRES_USER: postgres
             POSTGRES_PASSWORD: postgres
-            POSTGRES_DB: akamvp
+            POSTGRES_DB: ai_knowledge_agent
         ports:
             - "5432:5432"
         volumes:
@@ -45,7 +45,7 @@ services:
             REDIS_RATE_LIMIT_URL: redis://redis:6379
             USE_DB_AUTHENTICATION: false
             # Using internal PostgreSQL for Firecrawl's queue management
-            NUQ_DATABASE_URL: postgres://postgres:postgres@postgres:5432/akamvp
+            NUQ_DATABASE_URL: postgres://postgres:postgres@postgres:5432/ai_knowledge_agent
             # Optional - add your OpenAI key for LLM features
             # OPENAI_API_KEY: ${OPENAI_API_KEY:-}
         depends_on:
