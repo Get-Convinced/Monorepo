@@ -33,6 +33,7 @@ class DatabaseClient:
     def async_engine(self) -> AsyncEngine:
         """Get or create async engine."""
         if self._async_engine is None:
+            # Configure engine with pool_pre_ping to test connections
             self._async_engine = create_async_engine(
                 self.config.async_database_url,
                 echo=self.config.echo,
@@ -40,6 +41,7 @@ class DatabaseClient:
                 pool_size=self.config.pool_size,
                 max_overflow=self.config.max_overflow,
                 pool_timeout=self.config.pool_timeout,
+                pool_pre_ping=True,  # Test connections before using them
             )
         return self._async_engine
     

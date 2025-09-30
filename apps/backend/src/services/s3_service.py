@@ -662,13 +662,8 @@ def get_s3_service() -> S3Service:
     region = os.getenv("AWS_REGION", "us-east-1")
     bucket_prefix = os.getenv("RAGIE_S3_BUCKET_PREFIX", "ragie-docs")
     
-    # Debug logging for AWS credentials and S3 configuration
+    # S3 configuration
     s3_bucket = os.getenv("S3_BUCKET", "get-convinced-dev")
-    print(f"🔑 AWS_ACCESS_KEY_ID: {access_key}")
-    print(f"🔐 AWS_SECRET_ACCESS_KEY: {secret_key[:10]}...{secret_key[-4:] if secret_key else 'None'}")
-    print(f"🌍 AWS_REGION: {region}")
-    print(f"🪣 S3_BUCKET: {s3_bucket}")
-    print(f"📁 RAGIE_S3_BUCKET_PREFIX: {bucket_prefix}")
     
     ragie_client = RagieClient(api_key=api_key)
     

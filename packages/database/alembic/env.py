@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # Import your models here
-from src.models import Base
-from src.config import get_database_config
+from shared_database.models import Base
+from shared_database.config import get_database_config
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -37,19 +37,21 @@ def get_database_url() -> str:
     import os
     # Use environment variables if available, otherwise use config
     if os.getenv('DB_HOST'):
-        user = os.getenv('DB_USER', 'gauthamgsabahit')
+        user = os.getenv('DB_USER', 'postgres')
         password = os.getenv('DB_PASSWORD', '')
         host = os.getenv('DB_HOST', 'localhost')
         port = os.getenv('DB_PORT', '5432')
         database = os.getenv('DB_NAME', 'ai_knowledge_agent')
-        
+
+        # Use sync driver for alembic (not asyncpg)
         if password:
-            return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
+            return f"postgresql://{user}:{password}@{host}:{port}/{database}"
         else:
-            return f"postgresql+asyncpg://{user}@{host}:{port}/{database}"
+            return f"postgresql://{user}@{host}:{port}/{database}"
     else:
+        # Fallback to config - but this should be sync URL for alembic
         db_config = get_database_config()
-        return db_config.async_database_url
+        return db_config.database_url  # Use sync URL, not async
 
 
 def run_migrations_offline() -> None:
@@ -105,7 +107,19 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import NullPool
+
+    # Use sync engine for alembic (not async)
+    connectable = create_engine(
+        get_database_url(),
+        poolclass=NullPool,
+    )
+
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
+
+    connectable.dispose()
 
 
 if context.is_offline_mode():

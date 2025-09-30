@@ -219,23 +219,11 @@ class RagieService:
                 "limit": limit
             })
             
-            # Debug: Print what we're sending to Ragie
-            print(f"🔍 RagieService DEBUG: Calling ragie_client.list_documents with:")
-            print(f"🔍   partition='{organization_id}'")
-            print(f"🔍   limit={limit}")
-            print(f"🔍   cursor={cursor}")
-            
             document_list = await self.ragie_client.list_documents(
                 partition=organization_id,
                 limit=limit,
                 cursor=cursor
             )
-            
-            # Debug: Print raw response
-            print(f"🔍 RagieService DEBUG: Raw response from Ragie:")
-            print(f"🔍   documents count: {len(document_list.documents)}")
-            print(f"🔍   has_more: {document_list.has_more}")
-            print(f"🔍   cursor: {document_list.cursor}")
             
             logger.info("Documents listed successfully", extra={
                 "organization_id": organization_id,
@@ -433,7 +421,9 @@ class RagieService:
         organization_id: str,
         max_chunks: int = 10,
         document_ids: Optional[List[str]] = None,
-        metadata_filter: Optional[Dict[str, Any]] = None
+        metadata_filter: Optional[Dict[str, Any]] = None,
+        min_score: Optional[float] = None,
+        rerank: bool = False
     ) -> RagieRetrievalResult:
         """
         Retrieve relevant document chunks for RAG.
@@ -442,42 +432,54 @@ class RagieService:
             query: Search query
             organization_id: Organization ID (partition)
             max_chunks: Maximum number of chunks to return
-            document_ids: Optional list of document IDs to filter by
+            document_ids: Optional list of document IDs to filter by (not supported directly; use metadata filter)
             metadata_filter: Optional metadata filters
+            min_score: Optional minimum relevance score threshold (client-side filter)
+            rerank: Enable post-retrieval reranking for better relevance
             
         Returns:
-            RagieRetrievalResult: Retrieval results with chunks
+            RagieRetrievalResult: Retrieval results with scored chunks
             
         Raises:
             RagieServiceError: If retrieval fails
         """
         try:
-            logger.info("Retrieving chunks", extra={
-                "organization_id": organization_id,
-                "query_length": len(query),
-                "max_chunks": max_chunks,
-                "document_ids_count": len(document_ids) if document_ids else 0
-            })
+            logger.info("Retrieving chunks from Ragie",
+                       extra={
+                           "query": query[:100] + "..." if len(query) > 100 else query,
+                           "organization_id": organization_id,
+                           "max_chunks": max_chunks,
+                           "rerank": rerank
+                       })
             
-            retrieval_result = await self.ragie_client.retrieve(
+            result = await self.ragie_client.retrieve_chunks(
                 query=query,
                 partition=organization_id,
                 max_chunks=max_chunks,
-                document_ids=document_ids,
-                metadata_filter=metadata_filter
+                metadata_filter=metadata_filter,
+                rerank=rerank
             )
             
-            logger.info("Chunks retrieved successfully", extra={
-                "organization_id": organization_id,
-                "chunks_found": len(retrieval_result.chunks)
-            })
+            # Client-side score filtering if requested
+            if min_score is not None and hasattr(result, "scored_chunks"):
+                original_len = len(result.scored_chunks)
+                result.scored_chunks = [
+                    chunk for chunk in result.scored_chunks
+                    if float(chunk.get("score", 0)) >= float(min_score)
+                ]
+                logger.info("Applied min_score filter",
+                            extra={"kept": len(result.scored_chunks), "original": original_len, "min_score": min_score})
             
-            return retrieval_result
+            logger.info("Retrieved chunks successfully", extra={
+                "organization_id": organization_id,
+                "chunks": len(getattr(result, "scored_chunks", []))
+            })
+            return result
             
         except RagieError as e:
             logger.error("Ragie API error during retrieval", extra={
                 "organization_id": organization_id,
-                "query": query[:100],  # Log first 100 chars
+                "query": query[:100],
                 "error": str(e)
             })
             raise RagieServiceError(f"Retrieval failed: {e}")

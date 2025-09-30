@@ -1,0 +1,27 @@
+---
+globs: apps/backend/**/*.py,apps/backend/**/*.md,apps/backend/**/*.json
+description: Backend-only rule for Ragie integration using the ragie.json OpenAPI spec as the source of truth.
+---
+
+### Ragie Integration (Backend Only)
+
+- **Source of truth**: The Ragie OpenAPI spec is at [apps/backend/tests/openAPI/ragie.json](mdc:apps/backend/tests/openAPI/ragie.json). Use it to determine endpoints, parameters, headers, request/response schemas, and error formats.
+- **Integration points**:
+  - Client: [apps/backend/src/adapters/ragie_client.py](mdc:apps/backend/src/adapters/ragie_client.py)
+  - Service: [apps/backend/src/services/ragie_service.py](mdc:apps/backend/src/services/ragie_service.py)
+  - Spec for reference/tests: [apps/backend/tests/openAPI/ragie.json](mdc:apps/backend/tests/openAPI/ragie.json)
+
+### Implementation Guidance
+- Always build requests in `ragie_client.py` to match the spec exactly (paths, query params, headers, body shapes). Read base URL and credentials from environment variables.
+- Parse responses per spec. For non-2xx, surface structured errors including `code`, `message`, and any `details` fields from Ragie.
+- Keep `ragie_service.py` focused on business logic and orchestration. Do not duplicate HTTP specifics there.
+- Follow backend development rules: service layer pattern, thin controllers, structured errors.
+
+### Testing Guidance
+- When adding or changing endpoints, update/add tests under `apps/backend/tests` to assert request/response shapes according to the OpenAPI spec.
+- Prefer contract-style assertions for error structures and required headers.
+
+### When the Spec Changes
+1. Update `ragie_client.py` (paths/params/bodies/headers) and response parsing to match `ragie.json`.
+2. Adjust `ragie_service.py` only if business behavior changes.
+3. Update tests to reflect the new/changed contract.

@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 from .api import organization_router, file_router
 from .api.ragie import router as ragie_router
 from .api.ragie_extensions import router as ragie_extensions_router
+from .api.chat import router as chat_router
 
 app = FastAPI(
     title="AI Knowledge Agent Backend",
@@ -53,6 +54,7 @@ app.include_router(organization_router)
 app.include_router(file_router)
 app.include_router(ragie_router)
 app.include_router(ragie_extensions_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")

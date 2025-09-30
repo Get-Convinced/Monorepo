@@ -428,3 +428,141 @@ class ProcessingLog(Base):
         Index('idx_processing_logs_job_stage', 'ingestion_job_id', 'processing_stage'),
         Index('idx_processing_logs_created_level', 'created_at', 'level'),
     )
+
+
+class ChatSession(Base):
+    """Chat session for RAG-powered conversations."""
+    
+    __tablename__ = "chat_sessions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
+    
+    # Session metadata
+    title = Column(String(255), nullable=False)  # Truncated from first message
+    is_active = Column(Boolean, default=True, nullable=False, index=True)  # Only one active per user
+    is_archived = Column(Boolean, default=False, nullable=False)
+    
+    # Configuration (extensible for future)
+    temperature = Column(Float, default=0.1, nullable=False)  # 0.1=Strict, 0.5=Balanced, 0.9=Creative
+    model_name = Column(String(100), default='gpt-4o', nullable=False)
+    max_context_messages = Column(Integer, default=5, nullable=False)
+    session_metadata = Column(JSON, nullable=True)  # Future: document filters, preferences
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    last_message_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    organization = relationship("Organization", foreign_keys=[organization_id])
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index('idx_chat_sessions_user_updated', 'user_id', 'updated_at'),
+        Index('idx_chat_sessions_org_updated', 'organization_id', 'updated_at'),
+        Index('idx_chat_sessions_active', 'user_id', 'is_active'),
+    )
+
+
+class ChatMessage(Base):
+    """Individual chat message with processing metadata."""
+    
+    __tablename__ = "chat_messages"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Message content
+    role = Column(String(20), nullable=False, index=True)  # 'user', 'assistant', 'system'
+    content = Column(Text, nullable=False)
+    
+    # Processing metadata
+    status = Column(String(20), default='completed', nullable=False)  # 'pending', 'streaming', 'completed', 'failed'
+    error_message = Column(Text, nullable=True)
+    error_details = Column(JSON, nullable=True)
+    
+    # LLM metadata (for assistant messages)
+    model_used = Column(String(100), nullable=True)
+    temperature_used = Column(Float, nullable=True)
+    tokens_prompt = Column(Integer, nullable=True)
+    tokens_completion = Column(Integer, nullable=True)
+    tokens_total = Column(Integer, nullable=True)
+    processing_time_ms = Column(Integer, nullable=True)
+    
+    # Message metadata (extensible)
+    message_metadata = Column(JSON, nullable=True)  # Future: feedback scores, edit history
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    session = relationship("ChatSession", back_populates="messages")
+    sources = relationship("ChatSource", back_populates="message", cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        Index('idx_chat_messages_session_created', 'session_id', 'created_at'),
+        Index('idx_chat_messages_role', 'session_id', 'role'),
+    )
+
+
+class ChatSource(Base):
+    """Source citations for chat messages."""
+    
+    __tablename__ = "chat_sources"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    message_id = Column(UUID(as_uuid=True), ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Ragie document reference
+    ragie_document_id = Column(String(255), nullable=False, index=True)
+    ragie_chunk_id = Column(String(255), nullable=True)
+    
+    # Source metadata
+    document_name = Column(String(500), nullable=False)
+    page_number = Column(Integer, nullable=True)
+    chunk_text = Column(Text, nullable=True)  # Denormalized for fast display
+    relevance_score = Column(Float, nullable=True)
+    
+    # Additional metadata
+    source_metadata = Column(JSON, nullable=True)  # Future: section, paragraph, confidence
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    message = relationship("ChatMessage", back_populates="sources")
+    
+    __table_args__ = (
+        Index('idx_chat_sources_message', 'message_id'),
+        Index('idx_chat_sources_ragie_doc', 'ragie_document_id'),
+    )
+
+
+class ChatRateLimit(Base):
+    """Rate limiting tracking for chat messages."""
+    
+    __tablename__ = "chat_rate_limits"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Rate limit scope (one of user or organization must be set)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=True, index=True)
+    
+    # Limits
+    messages_count = Column(Integer, default=0, nullable=False)
+    window_start = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    window_duration_hours = Column(Integer, default=1, nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    __table_args__ = (
+        Index('idx_rate_limits_user_window', 'user_id', 'window_start'),
+        Index('idx_rate_limits_org_window', 'organization_id', 'window_start'),
+    )

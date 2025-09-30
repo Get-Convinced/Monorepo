@@ -17,7 +17,8 @@ from ..models.ragie import (
     RagieRetrievalResult,
     RagieChunk,
     RagieDocumentStatus,
-    RagieErrorResponse
+    RagieErrorResponse,
+    RagieScoredChunk
 )
 
 logger = logging.getLogger(__name__)
@@ -423,9 +424,6 @@ class RagieClient:
             "payload_keys": list(payload.keys())
         })
         
-        # Also print directly to console to ensure we see it
-        print(f"🔗 FULL S3 URL SENT TO RAGIE: {url}")
-        print(f"📦 FULL PAYLOAD SENT TO RAGIE: {payload}")
         
         try:
             response = await self._make_request(
@@ -490,13 +488,6 @@ class RagieClient:
         if cursor:
             params["cursor"] = cursor
         
-        # Debug: Print the exact request details
-        print(f"🔍 RagieClient DEBUG: Making list_documents request:")
-        print(f"🔍   URL: {self.base_url}/documents")
-        print(f"🔍   partition: '{partition}'")
-        print(f"🔍   params: {params}")
-        print(f"🔍   headers will include: partition: '{partition}'")
-        
         response = await self._make_request(
             method="GET",
             endpoint="/documents",
@@ -505,26 +496,13 @@ class RagieClient:
         )
         
         data = response.json()
-        
-        # Debug: Print the raw response
-        print(f"🔍 RagieClient DEBUG: Raw response from Ragie API:")
-        print(f"🔍   status_code: {response.status_code}")
-        print(f"🔍   response_data: {data}")
-        
         documents = [self._parse_document(doc) for doc in data.get("documents", [])]
         
-        result = RagieDocumentList(
+        return RagieDocumentList(
             documents=documents,
             cursor=data.get("cursor"),
             has_more=data.get("has_more", False)
         )
-        
-        print(f"🔍 RagieClient DEBUG: Parsed result:")
-        print(f"🔍   documents_count: {len(result.documents)}")
-        print(f"🔍   has_more: {result.has_more}")
-        print(f"🔍   cursor: {result.cursor}")
-        
-        return result
     
     async def get_document(self, document_id: str, partition: str) -> RagieDocument:
         """
@@ -600,32 +578,36 @@ class RagieClient:
         query: str,
         partition: str,
         max_chunks: int = 10,
-        document_ids: Optional[List[str]] = None,
-        metadata_filter: Optional[Dict[str, Any]] = None
+        metadata_filter: Optional[Dict[str, Any]] = None,
+        rerank: bool = False,
+        max_chunks_per_document: Optional[int] = None
     ) -> RagieRetrievalResult:
         """
         Retrieve relevant document chunks for RAG.
         
         Args:
             query: Search query
-            partition: Organization partition
-            max_chunks: Maximum chunks to return
-            document_ids: Filter by specific document IDs
-            metadata_filter: Filter by metadata
+            partition: Organization partition (also sent in body per spec)
+            max_chunks: Maximum number of chunks to return (maps to top_k)
+            metadata_filter: Metadata filter (maps to filter)
+            rerank: Enable reranking for higher relevance
+            max_chunks_per_document: Optional per-document cap
             
         Returns:
-            Retrieval results with scored chunks
+            RagieRetrievalResult with scored_chunks per spec
         """
-        request_data = {
+        # Build request per OpenAPI RetrieveParams
+        request_data: Dict[str, Any] = {
             "query": query,
-            "max_chunks": max_chunks
+            "top_k": max_chunks,
+            "partition": partition,
+            "rerank": rerank
         }
         
-        if document_ids:
-            request_data["document_ids"] = document_ids
-        
         if metadata_filter:
-            request_data["metadata_filter"] = metadata_filter
+            request_data["filter"] = metadata_filter
+        if isinstance(max_chunks_per_document, int):
+            request_data["max_chunks_per_document"] = max_chunks_per_document
         
         response = await self._make_request(
             method="POST",
@@ -634,23 +616,22 @@ class RagieClient:
             json_data=request_data
         )
         
-        data = response.json()
-        chunks = []
+        data = response.json() or {}
+        scored_items: List[RagieScoredChunk] = []
+        for item in data.get("scored_chunks", []) or []:
+            scored_items.append(RagieScoredChunk(
+                id=item.get("id"),
+                index=item.get("index"),
+                text=item.get("text", ""),
+                score=float(item.get("score", 0)),
+                metadata=item.get("metadata") or {},
+                document_id=item.get("document_id"),
+                document_name=item.get("document_name", ""),
+                document_metadata=item.get("document_metadata") or {},
+                links=item.get("links") or {}
+            ))
         
-        for scored_chunk in data.get("scored_chunks", []):
-            chunk_data = scored_chunk["chunk"]
-            score = scored_chunk["score"]
-            
-            chunk = RagieChunk(
-                id=chunk_data["id"],
-                document_id=chunk_data["document_id"],
-                text=chunk_data["text"],
-                score=score,
-                metadata=chunk_data.get("metadata", {})
-            )
-            chunks.append(chunk)
-        
-        return RagieRetrievalResult(chunks=chunks)
+        return RagieRetrievalResult(scored_chunks=scored_items)
     
     async def get_document_source(
         self,

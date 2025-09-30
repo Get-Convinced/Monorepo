@@ -374,26 +374,12 @@ async def list_documents(
     
     logger.info(f"📋 list_documents called - user_id: {user_id}, org_id: {organization_id}, limit: {limit}")
     
-    # Debug: Print the exact organization_id being used
-    print(f"🔍 DEBUG: Listing documents for organization_id: '{organization_id}'")
-    print(f"🔍 DEBUG: user_id: '{user_id}'")
-    print(f"🔍 DEBUG: limit: {limit}, cursor: {cursor}")
-    
     try:
         document_list = await ragie_service.list_documents(
             organization_id=organization_id,
             limit=limit,
             cursor=cursor
         )
-        
-        # Debug: Print what we got back from Ragie
-        print(f"🔍 DEBUG: Ragie returned {len(document_list.documents)} documents")
-        print(f"🔍 DEBUG: has_more: {document_list.has_more}, cursor: {document_list.cursor}")
-        if document_list.documents:
-            for i, doc in enumerate(document_list.documents):
-                print(f"🔍 DEBUG: Document {i+1}: id={doc.id}, name={doc.name}, status={doc.status}")
-        else:
-            print("🔍 DEBUG: No documents found in response")
         
         # Convert documents to dict for response
         documents_dict = []
@@ -546,20 +532,18 @@ async def query_documents(
             metadata_filter=request.metadata_filter
         )
         
-        # Convert chunks to dict for response
-        chunks_dict = [chunk.dict() for chunk in retrieval_result.chunks]
+        # Convert scored_chunks to dict for response
+        chunks_dict = [chunk.dict() for chunk in retrieval_result.scored_chunks]
         
         response_data = {
-            "chunks": chunks_dict,
-            "document_ids": retrieval_result.document_ids,
-            "average_score": retrieval_result.average_score
+            "scored_chunks": chunks_dict
         }
         
         logger.info("Document query completed successfully", extra={
             "organization_id": organization_id,
             "user_id": user_id,
             "query_length": len(request.query),
-            "chunks_found": len(retrieval_result.chunks)
+            "chunks_found": len(retrieval_result.scored_chunks)
         })
         
         return {"success": True, "data": response_data}

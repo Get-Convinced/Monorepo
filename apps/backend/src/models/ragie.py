@@ -51,11 +51,22 @@ class RagieChunk(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Chunk metadata")
 
 
+class RagieScoredChunk(BaseModel):
+    """Scored chunk as returned by Ragie /retrievals endpoint."""
+    id: str = Field(..., description="Chunk identifier")
+    index: Optional[int] = Field(None, description="Chunk index within document")
+    text: str = Field(..., description="Chunk text content")
+    score: float = Field(..., description="Relevance score")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Chunk metadata")
+    document_id: str = Field(..., description="Parent document ID")
+    document_name: str = Field(..., description="Parent document name")
+    document_metadata: Dict[str, Any] = Field(default_factory=dict, description="Document metadata")
+    links: Dict[str, Any] = Field(default_factory=dict, description="Chunk links")
+
+
 class RagieRetrievalResult(BaseModel):
-    """Result from document retrieval query."""
-    chunks: List[RagieChunk] = Field(..., description="Retrieved chunks")
-    document_ids: List[str] = Field(..., description="Document IDs that matched")
-    average_score: float = Field(..., description="Average relevance score")
+    """Result from document retrieval query (OpenAPI compliant)."""
+    scored_chunks: List[RagieScoredChunk] = Field(default_factory=list, description="Retrieved scored chunks")
 
 
 # Upload progress tracking model
