@@ -17,10 +17,10 @@ interface Website {
 }
 
 interface WebsitesTabProps {
-    websites: Website[];
+    websites?: Website[];
 }
 
-export function WebsitesTab({ websites }: WebsitesTabProps) {
+export function WebsitesTab({ websites = [] }: WebsitesTabProps) {
     return (
         <Card>
             <CardHeader>

@@ -11,3 +11,11 @@ alwaysApply: true
 - Use the folder ./docs/implmentation_phases to maintain your to-do list. You can have names such as phase-1/2/3 and feature_<name> for different features we are working on
 - Use the folder ./docs/UI_reference for reference UI wireframes. You will use ANT desgin stack to implement the wireframes and dont ahve to stick to whats given to the dot. Since the image could use a different design language
 - use uv for python and pnpm for node projects for package management
+- When ever you create a testing script, put it in the testing folder of respective project ( backend/document_processor/frontend
+- Never use python or npm. Use uv and pnpm please 
+- Stick to DRY, KISS and YAGNI principles while coding 
+- Always be on the lookout for dead code , redundancy. 
+- Keep things modular 
+- Class based designs so we can have unit tests later on. 
+- Be mindful when creating new files. Check if a file of similar responsibility exists that can be modified for the purpose. 
+- Be mindful of the testing folder structure when creating tests. Check /tests and where to create the file before creating tests

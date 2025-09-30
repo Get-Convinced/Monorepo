@@ -1,8 +1,8 @@
 """
-File API endpoints.
+File API endpoints with proper Frontegg authentication.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +22,7 @@ from ..models.file import (
     FileSearchRequest,
     FileSearchResponse
 )
+from ..auth import get_current_user, get_organization_id
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -34,27 +35,39 @@ def get_db_client() -> DatabaseClient:
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(
     background_tasks: BackgroundTasks,
-    organization_id: UUID,
-    user_id: UUID,
     file: UploadFile = File(...),
     subfolder: str = Query(default="documents", description="Subfolder within user directory"),
     tags: Optional[List[str]] = Query(default=None, description="File tags"),
-    metadata: Optional[dict] = Query(default=None, description="Additional metadata"),
+    metadata: Optional[str] = Query(default=None, description="Additional metadata as JSON string"),
+    org_id: str = Depends(get_organization_id),
     db_client: DatabaseClient = Depends(get_db_client),
     s3_service: S3Service = Depends(get_s3_service),
     session: AsyncSession = Depends(get_async_session)
 ):
     """Upload a file to S3 and create database record."""
     try:
+        # Extract authenticated user and organization from context
+        user_info = user  # User info from auth
+        organization_id = UUID(org_id)
+        user_id = UUID(user_info["sub"])  # Frontegg user ID from JWT
+        
         # Verify organization exists
         organization = await db_client.get_organization_by_id(session, organization_id)
         if not organization:
             raise HTTPException(status_code=404, detail="Organization not found")
         
-        # Verify user exists
+        # Verify user exists (or create if needed)
         user = await db_client.get_user_by_id(session, user_id)
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            # Create user from Frontegg data if doesn't exist
+            user = await db_client.create_user(
+                session=session,
+                id=user_id,
+                email=user_info.get("email"),
+                name=user_info.get("name", user_info.get("email", "Unknown User")),
+                profile_data={"frontegg_user_id": user_info["sub"]},
+                avatar_url=user_info.get("profilePictureUrl")
+            )
         
         # Upload file to S3
         s3_file, s3_key = await s3_service.upload_file(
@@ -110,10 +123,10 @@ async def upload_file(
 
 @router.get("/", response_model=FileListResponse)
 async def list_files(
-    organization_id: Optional[UUID] = Query(default=None, description="Filter by organization"),
-    user_id: Optional[UUID] = Query(default=None, description="Filter by user"),
+    user_id: Optional[UUID] = Query(default=None, description="Filter by specific user (admin only)"),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    org_id: str = Depends(get_organization_id),
     db_client: DatabaseClient = Depends(get_db_client),
     session: AsyncSession = Depends(get_async_session)
 ):
@@ -122,29 +135,35 @@ async def list_files(
         from shared_database.services import S3FileService
         service = S3FileService(session)
         
-        if organization_id and user_id:
+        # Extract authenticated user and organization from context
+        user_info = user  # User info from auth
+        organization_id = UUID(org_id)
+        current_user_id = UUID(user_info["sub"])
+        
+        # Check if user is requesting files for a specific user (admin feature)
+        if user_id and user_id != current_user_id:
+            # TODO: Add admin role check here
+            # For now, allow any authenticated user to see any user's files in their org
             files = await service.list_user_files(
                 user_id=user_id,
-                organization_id=organization_id,
-                limit=limit,
-                offset=offset
-            )
-        elif organization_id:
-            files = await service.list_organization_files(
                 organization_id=organization_id,
                 limit=limit,
                 offset=offset
             )
         elif user_id:
+            # User requesting their own files
             files = await service.list_user_files(
-                user_id=user_id,
+                user_id=current_user_id,
+                organization_id=organization_id,
                 limit=limit,
                 offset=offset
             )
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Either organization_id or user_id must be provided"
+            # List all files in the organization
+            files = await service.list_organization_files(
+                organization_id=organization_id,
+                limit=limit,
+                offset=offset
             )
         
         return FileListResponse(

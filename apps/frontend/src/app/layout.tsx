@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { FronteggAppProvider } from "@frontegg/nextjs/app";
+import { QueryProvider } from "@/lib/query-client";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -25,14 +26,19 @@ export default function RootLayout({
 }>) {
     const authOptions = {
         keepSessionAlive: true,
+        logoutUrl: "/login", // Where to redirect after logout
+        // Alternative: you can also use postLogoutRedirectUri
+        // postLogoutRedirectUri: '/login'
     };
 
     return (
         <html lang="en" className="h-full">
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full`}>
-                <FronteggAppProvider authOptions={authOptions} customLoader={true}>
-                    <div className="h-full">{children}</div>
-                </FronteggAppProvider>
+                <QueryProvider>
+                    <FronteggAppProvider authOptions={authOptions} customLoader={true}>
+                        <div className="h-full">{children}</div>
+                    </FronteggAppProvider>
+                </QueryProvider>
             </body>
         </html>
     );
