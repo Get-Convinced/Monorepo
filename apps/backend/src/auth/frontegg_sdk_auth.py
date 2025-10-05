@@ -71,7 +71,7 @@ class FronteggSDKAuth:
             )
             
         except Exception as e:
-            logger.error(f"🔐 Failed to initialize JWKS client: {e}")
+            logger.error(f"Failed to initialize JWKS client: {e}")
             self.enabled = False
             self.jwks_client = None
     
@@ -136,13 +136,13 @@ class FronteggSDKAuth:
             return user_info
             
         except InvalidTokenError as e:
-            logger.error(f"🔐 Invalid JWT token: {e}")
+            logger.error(f"Invalid JWT token: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid token: {str(e)}"
             )
         except Exception as e:
-            logger.error(f"🔐 JWT verification failed: {e}")
+            logger.error(f"JWT verification failed: {e}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Token verification failed: {str(e)}"

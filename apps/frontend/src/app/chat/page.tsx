@@ -1,5 +1,5 @@
 import { SidebarLayout } from "@/components/dashboard/sidebar-layout";
-import { ChatInterface } from "@/components/chat/chat-interface";
+import { ChatLayout } from "@/components/chat/chat-layout";
 import { getAppUserSession } from "@frontegg/nextjs/app";
 import { redirect } from "next/navigation";
 
@@ -12,7 +12,7 @@ export default async function ChatPage() {
 
     return (
         <SidebarLayout>
-            <ChatInterface />
+            <ChatLayout />
         </SidebarLayout>
     );
 }

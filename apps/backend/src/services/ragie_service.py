@@ -124,17 +124,17 @@ class RagieService:
             # Validate file
             self._validate_file(file_content, filename)
             
-            logger.info("Starting document upload", extra={
-                "file_name": filename,
-                "organization_id": organization_id,
-                "user_id": user_id,
-                "file_size": len(file_content),
-                "upload_method": "s3_url" if self.use_s3_upload else "direct_upload"
-            })
+            logger.info(
+                f"Starting document upload file_name={filename} org_id={organization_id} "
+                f"user_id={user_id} size_bytes={len(file_content)} "
+                f"upload_method={'s3_url' if self.use_s3_upload else 'direct_upload'}"
+            )
             
             if self.use_s3_upload and self.ragie_s3_service:
                 # Use S3 + URL approach (preferred)
-                logger.info("Using S3+URL upload method")
+                logger.info(
+                    f"Using S3+URL upload method file_name={filename} org_id={organization_id} user_id={user_id}"
+                )
                 document, s3_url = await self.ragie_s3_service.upload_document_for_ragie(
                     file_content=file_content,
                     filename=filename,
@@ -144,16 +144,16 @@ class RagieService:
                     upload_id=upload_id
                 )
                 
-                logger.info("Document uploaded via S3+URL successfully", extra={
-                    "document_id": document.id,
-                    "file_name": filename,
-                    "organization_id": organization_id,
-                    "user_id": user_id,
-                    "s3_url": s3_url[:100] + "..." if len(s3_url) > 100 else s3_url
-                })
+                logger.info(
+                    f"Document uploaded via S3+URL successfully doc_id={document.id} "
+                    f"file_name={filename} org_id={organization_id} user_id={user_id} "
+                    f"s3_url={(s3_url[:100] + '...') if len(s3_url) > 100 else s3_url}"
+                )
             else:
                 # Fallback to direct upload
-                logger.info("Using direct upload method (fallback)")
+                logger.info(
+                    f"Using direct upload method (fallback) file_name={filename} org_id={organization_id} user_id={user_id}"
+                )
                 document = await self.ragie_client.upload_document(
                     file_content=file_content,
                     filename=filename,
@@ -161,12 +161,10 @@ class RagieService:
                     metadata=metadata or {}
                 )
                 
-                logger.info("Document uploaded directly successfully", extra={
-                    "document_id": document.id,
-                    "file_name": filename,
-                    "organization_id": organization_id,
-                    "user_id": user_id
-                })
+                logger.info(
+                    f"Document uploaded directly successfully doc_id={document.id} "
+                    f"file_name={filename} org_id={organization_id} user_id={user_id}"
+                )
             
             return document
             
@@ -419,7 +417,7 @@ class RagieService:
         self,
         query: str,
         organization_id: str,
-        max_chunks: int = 10,
+        max_chunks: int = 15,
         document_ids: Optional[List[str]] = None,
         metadata_filter: Optional[Dict[str, Any]] = None,
         min_score: Optional[float] = None,

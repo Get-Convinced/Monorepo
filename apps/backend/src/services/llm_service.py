@@ -189,6 +189,7 @@ Instructions:
                 extra={
                     "model": model,
                     "mode": mode.value,
+                    "temperature": temperature,
                     "chunks_count": len(chunks),
                     "history_messages": len(conversation_history or []),
                     "prompt_tokens": total_prompt_tokens
@@ -237,11 +238,20 @@ Instructions:
             raise LLMServiceError(f"Unexpected error: {e}")
 
 
+# Singleton instance to avoid repeated initialization
+_llm_service_instance: Optional[LLMService] = None
+
 def get_llm_service() -> LLMService:
     """
-    Dependency to get LLM service instance.
+    Dependency to get LLM service instance (singleton).
     
     Returns:
         Configured LLM service
     """
-    return LLMService()
+    global _llm_service_instance
+    
+    if _llm_service_instance is None:
+        _llm_service_instance = LLMService()
+        logger.info("LLM service initialized")
+    
+    return _llm_service_instance

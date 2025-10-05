@@ -159,7 +159,7 @@ class S3Service:
         try:
             # Check if bucket exists
             self.s3_client.head_bucket(Bucket=bucket_name)
-            logger.info(f"✅ Main bucket exists: {bucket_name}")
+            logger.info(f"Main bucket exists: {bucket_name}")
             return bucket_name
             
         except ClientError as e:
@@ -248,14 +248,14 @@ class S3Service:
             if versions:
                 latest_version = max(versions)
                 next_version = latest_version + 1
-                logger.info(f"📁 Found {len(versions)} existing versions, next version: v{next_version:03d}")
+                logger.info(f"Found {len(versions)} existing versions, next version: v{next_version:03d}")
                 return next_version
             else:
-                logger.info(f"📁 No existing versions found, starting with v001")
+                logger.info(f"No existing versions found, starting with v001")
                 return 1
                 
         except Exception as e:
-            logger.warning(f"⚠️ Error checking for existing versions: {e}")
+            logger.warning(f"Error checking for existing versions: {e}")
             return 1  # Default to version 1 if error
     
     def list_file_versions(
@@ -310,11 +310,11 @@ class S3Service:
             # Sort by version number (newest first)
             versions.sort(key=lambda x: x['version'], reverse=True)
             
-            logger.info(f"📋 Found {len(versions)} versions of file: {filename}")
+            logger.info(f"Found {len(versions)} versions of file: {filename}")
             return versions
             
         except Exception as e:
-            logger.error(f"❌ Error listing file versions: {e}")
+            logger.error(f"Error listing file versions: {e}")
             return []
     
     async def upload_document_for_ragie(
@@ -370,7 +370,7 @@ class S3Service:
                 for key, value in metadata.items():
                     s3_metadata[f"ragie_{key}"] = str(value)
             
-            logger.info(f"📤 Uploading to S3 with version control", extra={
+            logger.info(f"Uploading to S3 with version control", extra={
                 "bucket_name": bucket_name,
                 "s3_key": s3_key,
                 "file_name": filename,
@@ -392,7 +392,7 @@ class S3Service:
                 
                 # Use multipart upload for progress tracking on larger files
                 if len(file_content) > 5 * 1024 * 1024:  # 5MB threshold
-                    logger.info(f"📤 Using multipart upload for large file: {len(file_content)} bytes")
+                    logger.info(f"Using multipart upload for large file: {len(file_content)} bytes")
                     self._multipart_upload_with_progress(
                         bucket_name=bucket_name,
                         s3_key=s3_key,
@@ -403,7 +403,7 @@ class S3Service:
                     )
                 else:
                     # For smaller files, use regular put_object (progress will be 0% then 80%)
-                    logger.info(f"📤 Using regular upload for small file: {len(file_content)} bytes")
+                    logger.info(f"Using regular upload for small file: {len(file_content)} bytes")
                     self.s3_client.put_object(
                         Bucket=bucket_name,
                         Key=s3_key,
@@ -430,7 +430,7 @@ class S3Service:
                 ExpiresIn=86400  # 24 hours
             )
             
-            logger.info(f"✅ S3 upload successful", extra={
+            logger.info(f"S3 upload successful", extra={
                 "s3_url": s3_url,
                 "bucket_name": bucket_name,
                 "s3_key": s3_key
@@ -448,7 +448,7 @@ class S3Service:
                 ))
             
             # Send URL to Ragie for processing
-            logger.info(f"🚀 Sending URL to Ragie", extra={
+            logger.info(f"[RAGIE] Sending URL to Ragie", extra={
                 "s3_url": s3_url,
                 "partition": organization_id,
                 "file_name": filename
@@ -457,10 +457,11 @@ class S3Service:
             document = await self.ragie_client.create_document_from_url(
                 url=s3_url,
                 partition=organization_id,
-                metadata=metadata
+                metadata=metadata,
+                name=filename  # Pass original filename with extension
             )
             
-            logger.info(f"✅ Ragie document created successfully", extra={
+            logger.info(f"Ragie document created successfully", extra={
                 "document_id": document.id,
                 "document_status": document.status,
                 "document_name": document.name,
@@ -483,7 +484,7 @@ class S3Service:
             return document, s3_url
             
         except RagieError as e:
-            logger.error(f"❌ Ragie API error during document creation", extra={
+            logger.error(f"Ragie API error during document creation", extra={
                 "error": str(e),
                 "s3_url": s3_url if 's3_url' in locals() else "not_created",
                 "organization_id": organization_id
@@ -492,13 +493,13 @@ class S3Service:
             if 'bucket_name' in locals() and 's3_key' in locals():
                 try:
                     self.s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
-                    logger.info(f"🧹 Cleaned up S3 file after Ragie failure: {s3_key}")
+                    logger.info(f"Cleaned up S3 file after Ragie failure: {s3_key}")
                 except Exception as cleanup_error:
-                    logger.warning(f"⚠️ Failed to cleanup S3 file: {cleanup_error}")
+                    logger.warning(f"Failed to cleanup S3 file: {cleanup_error}")
             raise S3ServiceError(f"Ragie document creation failed: {str(e)}")
             
         except Exception as e:
-            logger.error(f"❌ Unexpected error during S3+Ragie upload", extra={
+            logger.error(f"Unexpected error during S3+Ragie upload", extra={
                 "error": str(e),
                 "error_type": type(e).__name__,
                 "organization_id": organization_id,
@@ -522,7 +523,7 @@ class S3Service:
             # Format: https://bucket-name.s3.region.amazonaws.com/key
             url_parts = s3_url.replace("https://", "").split("/", 1)
             if len(url_parts) != 2:
-                logger.warning(f"⚠️ Invalid S3 URL format: {s3_url}")
+                logger.warning(f"Invalid S3 URL format: {s3_url}")
                 return False
             
             bucket_part = url_parts[0]
@@ -534,19 +535,19 @@ class S3Service:
             # Verify this is the correct bucket
             expected_bucket = self.get_organization_bucket_name(organization_id)
             if bucket_name != expected_bucket:
-                logger.warning(f"⚠️ Bucket mismatch: {bucket_name} != {expected_bucket}")
+                logger.warning(f"Bucket mismatch: {bucket_name} != {expected_bucket}")
                 return False
             
             # Verify the key starts with the expected organization prefix
             expected_prefix = f"{self.bucket_prefix}/{organization_id}/"
             if not s3_key.startswith(expected_prefix):
-                logger.warning(f"⚠️ Key prefix mismatch: {s3_key} doesn't start with {expected_prefix}")
+                logger.warning(f"Key prefix mismatch: {s3_key} doesn't start with {expected_prefix}")
                 return False
             
             # Delete the file
             self.s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
             
-            logger.info(f"🧹 S3 file cleaned up successfully", extra={
+            logger.info(f"S3 file cleaned up successfully", extra={
                 "s3_url": s3_url,
                 "bucket_name": bucket_name,
                 "s3_key": s3_key
@@ -555,7 +556,7 @@ class S3Service:
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to cleanup S3 file", extra={
+            logger.error(f"Failed to cleanup S3 file", extra={
                 "s3_url": s3_url,
                 "error": str(e)
             })
@@ -627,7 +628,7 @@ class S3Service:
                 MultipartUpload={'Parts': parts}
             )
             
-            logger.info(f"✅ Multipart upload completed: {len(parts)} parts")
+            logger.info(f"Multipart upload completed: {len(parts)} parts")
             
         except Exception as e:
             # Abort multipart upload on error
@@ -640,37 +641,45 @@ class S3Service:
             except:
                 pass  # Ignore cleanup errors
             
-            logger.error(f"❌ Multipart upload failed: {e}")
+            logger.error(f"Multipart upload failed: {e}")
             raise
 
 
+# Singleton instance to avoid repeated initialization
+_s3_service_instance: Optional[S3Service] = None
+
 def get_s3_service() -> S3Service:
     """
-    Factory function to create S3Service instance.
+    Factory function to create S3Service instance (singleton).
     
     Returns:
         Configured S3Service instance
     """
-    # Get Ragie client
-    api_key = os.getenv("RAGIE_API_KEY")
-    if not api_key:
-        raise S3ServiceError("Ragie API key not configured")
+    global _s3_service_instance
     
-    # Get AWS credentials
-    access_key = os.getenv("AWS_ACCESS_KEY_ID")
-    secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-    region = os.getenv("AWS_REGION", "us-east-1")
-    bucket_prefix = os.getenv("RAGIE_S3_BUCKET_PREFIX", "ragie-docs")
+    if _s3_service_instance is None:
+        # Import here to avoid circular import
+        from ..api.ragie import get_ragie_client
+        
+        # Get shared Ragie client singleton
+        ragie_client = get_ragie_client()
+        
+        # Get AWS credentials
+        access_key = os.getenv("AWS_ACCESS_KEY_ID")
+        secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+        region = os.getenv("AWS_REGION", "us-east-1")
+        bucket_prefix = os.getenv("RAGIE_S3_BUCKET_PREFIX", "ragie-docs")
+        
+        # S3 configuration
+        s3_bucket = os.getenv("S3_BUCKET", "get-convinced-dev")
+        
+        _s3_service_instance = S3Service(
+            ragie_client=ragie_client,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            aws_region=region,
+            bucket_prefix=bucket_prefix
+        )
+        logger.info("S3 service initialized")
     
-    # S3 configuration
-    s3_bucket = os.getenv("S3_BUCKET", "get-convinced-dev")
-    
-    ragie_client = RagieClient(api_key=api_key)
-    
-    return S3Service(
-        ragie_client=ragie_client,
-        aws_access_key_id=access_key,
-        aws_secret_access_key=secret_key,
-        aws_region=region,
-        bucket_prefix=bucket_prefix
-    )
+    return _s3_service_instance

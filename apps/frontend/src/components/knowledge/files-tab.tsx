@@ -25,7 +25,7 @@ import { formatDistanceToNow } from "date-fns";
 export function FilesTab() {
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "processing" | "failed">("all");
+    const [statusFilter, setStatusFilter] = useState<string>("all");
     const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
     // Single source of truth - React Query only
@@ -147,7 +147,7 @@ export function FilesTab() {
                             />
                         </div>
 
-                        <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
+                        <Select value={statusFilter} onValueChange={(value: string) => setStatusFilter(value)}>
                             <SelectTrigger className="w-[180px]">
                                 <Filter className="mr-2 w-4 h-4" />
                                 <SelectValue />
@@ -155,7 +155,14 @@ export function FilesTab() {
                             <SelectContent>
                                 <SelectItem value="all">All Status</SelectItem>
                                 <SelectItem value="ready">Ready</SelectItem>
-                                <SelectItem value="processing">Processing</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="partitioning">Partitioning</SelectItem>
+                                <SelectItem value="partitioned">Partitioned</SelectItem>
+                                <SelectItem value="refined">Refined</SelectItem>
+                                <SelectItem value="chunked">Chunked</SelectItem>
+                                <SelectItem value="indexed">Indexed</SelectItem>
+                                <SelectItem value="summary_indexed">Summary Indexed</SelectItem>
+                                <SelectItem value="keyword_indexed">Keyword Indexed</SelectItem>
                                 <SelectItem value="failed">Failed</SelectItem>
                             </SelectContent>
                         </Select>
@@ -228,29 +235,29 @@ export function FilesTab() {
 
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between items-center">
-                                            <p className="font-medium truncate">{doc.name}</p>
-                                            <div className="flex items-center">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium truncate">{doc.name}</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {doc.metadata?.title && `${doc.metadata.title} • `}
+                                                    Updated {formatDate(doc.updated_at)}
+                                                </p>
+                                                {doc.metadata?.tags && doc.metadata.tags.length > 0 && (
+                                                    <div className="flex gap-1 items-center mt-1">
+                                                        <Tag className="w-3 h-3 text-muted-foreground" />
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {doc.metadata.tags.map((tag, index) => (
+                                                                <Badge key={index} variant="outline" className="text-xs">
+                                                                    {tag}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center ml-4">
                                                 <StatusBadge status={doc.status} />
                                             </div>
                                         </div>
-
-                                        <p className="text-sm text-muted-foreground">
-                                            {doc.metadata?.title && `${doc.metadata.title} • `}
-                                            Updated {formatDate(doc.updated_at)}
-                                        </p>
-
-                                        {doc.metadata?.tags && doc.metadata.tags.length > 0 && (
-                                            <div className="flex gap-1 items-center mt-1">
-                                                <Tag className="w-3 h-3 text-muted-foreground" />
-                                                <div className="flex flex-wrap gap-1">
-                                                    {doc.metadata.tags.map((tag, index) => (
-                                                        <Badge key={index} variant="outline" className="text-xs">
-                                                            {tag}
-                                                        </Badge>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
 
                                     <div className="flex items-center space-x-2">

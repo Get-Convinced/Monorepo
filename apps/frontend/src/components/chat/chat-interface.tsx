@@ -5,27 +5,37 @@ import { ChatHeader } from "./chat-header";
 import { MessageArea } from "./message-area";
 import { InputArea } from "./input-area";
 import { SuggestedPrompts } from "./suggested-prompts";
-import { useChat } from "@/hooks/useChat";
-import { ResponseMode } from "@/lib/api/chat";
+import { ResponseMode, ChatSession, ChatMessage } from "@/lib/api/chat";
 import { Loader2 } from "lucide-react";
 
-export function ChatInterface() {
+interface ChatInterfaceProps {
+    session: ChatSession | null;
+    sessionLoading: boolean;
+    messages: ChatMessage[];
+    messagesLoading: boolean;
+    isSending: boolean;
+    error: string | null;
+    sendMessage: (question: string, mode?: ResponseMode, model?: 'gpt-4o' | 'gpt-3.5-turbo') => Promise<void>;
+    createNewSession: () => Promise<void>;
+    retryLastMessage: () => Promise<void>;
+    scrollToBottom: () => void;
+}
+
+export function ChatInterface({
+    session,
+    sessionLoading,
+    messages,
+    messagesLoading,
+    isSending,
+    error,
+    sendMessage,
+    createNewSession,
+    retryLastMessage,
+    scrollToBottom
+}: ChatInterfaceProps) {
     const [suggestedPromptsVisible, setSuggestedPromptsVisible] = useState(true);
     const [mode, setMode] = useState<ResponseMode>(ResponseMode.STRICT);
     const [model, setModel] = useState<'gpt-4o' | 'gpt-3.5-turbo'>('gpt-4o');
-    
-    const {
-        session,
-        sessionLoading,
-        messages,
-        messagesLoading,
-        isSending,
-        error,
-        sendMessage,
-        createNewSession,
-        retryLastMessage,
-        scrollToBottom
-    } = useChat();
 
     const handleCloseSuggestedPrompts = () => {
         setSuggestedPromptsVisible(false);

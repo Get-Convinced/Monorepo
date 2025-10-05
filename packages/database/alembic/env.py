@@ -35,7 +35,37 @@ target_metadata = Base.metadata
 def get_database_url() -> str:
     """Get database URL from environment or config."""
     import os
-    # Use environment variables if available, otherwise use config
+    import json
+    
+    # First check for DATABASE_URL (from Secrets Manager)
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        # If it's JSON (from Secrets Manager), parse it and build URL
+        try:
+            db_config = json.loads(database_url)
+            user = db_config.get('username', 'postgres')
+            password = db_config.get('password', '')
+            host = db_config.get('host', 'localhost')
+            port = db_config.get('port', '5432')
+            database = db_config.get('dbname', 'ai_knowledge_agent')
+            
+            # Remove port from host if it's already included
+            if ':' in host:
+                host = host.split(':')[0]
+            
+            # Build PostgreSQL URL
+            if password:
+                return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+            else:
+                return f"postgresql://{user}@{host}:{port}/{database}"
+        except json.JSONDecodeError:
+            # If it's not JSON, assume it's already a proper URL
+            # Convert async URL to sync URL for alembic
+            if database_url.startswith('postgresql+asyncpg://'):
+                return database_url.replace('postgresql+asyncpg://', 'postgresql://')
+            return database_url
+    
+    # Use individual environment variables if available
     if os.getenv('DB_HOST'):
         user = os.getenv('DB_USER', 'postgres')
         password = os.getenv('DB_PASSWORD', '')

@@ -1,0 +1,121 @@
+name: Infrastructure Deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/infrastructure.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/infrastructure.yml'
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: '1.6.0'
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    strategy:
+      matrix:
+        environment: [staging, prod]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: infra/envs/${{ matrix.environment }}
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/envs/${{ matrix.environment }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: infra/envs/${{ matrix.environment }}
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
+        working-directory: infra/envs/${{ matrix.environment }}
+
+  terraform-apply-staging:
+    name: Terraform Apply - Staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: []
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/envs/staging
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
+        working-directory: infra/envs/staging
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infra/envs/staging
+
+  terraform-apply-prod:
+    name: Terraform Apply - Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [terraform-apply-staging]
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/envs/prod
+
+      - name: Terraform Plan
+        run: terraform plan -no-color
+        working-directory: infra/envs/prod
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: infra/envs/prod

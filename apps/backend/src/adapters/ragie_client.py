@@ -249,7 +249,7 @@ class RagieClient:
             error_data = {}
             error_msg = f"HTTP {response.status_code}"
         
-        logger.error(f"❌ Ragie API client error", extra={
+        logger.error(f"Ragie API client error", extra={
             "status_code": response.status_code,
             "error_message": error_msg,
             "error_data": error_data,
@@ -360,7 +360,7 @@ class RagieClient:
             
             document = self._parse_document(document_data)
             
-            logger.info("✅ Document uploaded successfully to Ragie", extra={
+            logger.info("Document uploaded successfully to Ragie", extra={
                 "document_id": document.id,
                 "status": document.status,
                 "document_name": document.name,
@@ -383,7 +383,8 @@ class RagieClient:
         url: str,
         partition: str,
         mode: str = "hi_res",
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        name: Optional[str] = None
     ) -> RagieDocument:
         """
         Create document from URL (S3 pre-signed URL approach).
@@ -396,18 +397,19 @@ class RagieClient:
         Returns:
             Document object
         """
-        logger.info("Creating document from URL", extra={
-            "url": url[:100] + "..." if len(url) > 100 else url,  # Truncate long URLs
-            "partition": partition,
-            "has_metadata": bool(metadata),
-            "metadata_keys": list(metadata.keys()) if metadata else None
-        })
+        logger.info(
+            f"Creating document from URL url={url[:100] + '...' if len(url) > 100 else url} "
+            f"partition={partition} has_metadata={bool(metadata)} "
+            f"metadata_keys={list(metadata.keys()) if metadata else None}"
+            f"name={name}"
+        )
         
         # Prepare request payload according to Ragie OpenAPI spec
         payload = {
             "url": url,
             "partition": partition,
-            "mode": mode
+            "mode": mode,
+            "name": name  # Use provided name (filename passed from S3 service)
         }
         
         if metadata:
@@ -448,7 +450,7 @@ class RagieClient:
             
             document = self._parse_document(document_data)
             
-            logger.info("✅ Document created from URL successfully", extra={
+            logger.info("Document created from URL successfully", extra={
                 "document_id": document.id,
                 "status": document.status,
                 "document_name": document.name,
@@ -577,7 +579,7 @@ class RagieClient:
         self,
         query: str,
         partition: str,
-        max_chunks: int = 10,
+        max_chunks: int = 15,
         metadata_filter: Optional[Dict[str, Any]] = None,
         rerank: bool = False,
         max_chunks_per_document: Optional[int] = None

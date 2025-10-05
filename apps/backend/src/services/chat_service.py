@@ -258,7 +258,7 @@ class ChatService:
             retrieval_result = await self.ragie_service.retrieve_chunks(
                 query=question,
                 organization_id=organization_id,
-                max_chunks=5
+                max_chunks=15
             )
             
             # Build sources directly from scored_chunks (no extra GETs)

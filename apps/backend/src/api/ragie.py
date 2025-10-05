@@ -48,7 +48,7 @@ class DocumentListResponse(BaseModel):
 class QueryRequest(BaseModel):
     """Request model for chunk retrieval."""
     query: str = Field(..., description="Search query")
-    max_chunks: Optional[int] = Field(10, description="Maximum chunks to return")
+    max_chunks: Optional[int] = Field(15, description="Maximum chunks to return")
     document_ids: Optional[List[str]] = Field(None, description="Filter by document IDs")
     metadata_filter: Optional[Dict[str, Any]] = Field(None, description="Metadata filters")
 
@@ -58,26 +58,42 @@ class MetadataUpdateRequest(BaseModel):
     metadata: Dict[str, Any] = Field(..., description="Updated metadata")
 
 
-# Dependency to get Ragie service
+# Singleton instances to avoid repeated initialization
+_ragie_client_instance: Optional[RagieClient] = None
+_ragie_service_instance: Optional[RagieService] = None
+
+def get_ragie_client() -> RagieClient:
+    """Get singleton Ragie client instance."""
+    global _ragie_client_instance
+    
+    if _ragie_client_instance is None:
+        api_key = os.getenv("RAGIE_API_KEY")
+        if not api_key:
+            raise HTTPException(
+                status_code=500,
+                detail="Ragie API key not configured"
+            )
+        _ragie_client_instance = RagieClient(api_key=api_key)
+    
+    return _ragie_client_instance
+
 def get_ragie_service() -> RagieService:
-    """Get configured Ragie service instance with S3 support."""
-    api_key = os.getenv("RAGIE_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="Ragie API key not configured"
-        )
+    """Get configured Ragie service instance with S3 support (singleton)."""
+    global _ragie_service_instance
     
-    ragie_client = RagieClient(api_key=api_key)
+    if _ragie_service_instance is None:
+        ragie_client = get_ragie_client()
+        
+        # Try to initialize S3 service for URL-based uploads
+        try:
+            ragie_s3_service = get_s3_service()
+            logger.info("S3 service initialized - using S3+URL upload method")
+            _ragie_service_instance = RagieService(ragie_client=ragie_client, ragie_s3_service=ragie_s3_service)
+        except Exception as e:
+            logger.warning(f"S3 service initialization failed, falling back to direct upload: {e}")
+            _ragie_service_instance = RagieService(ragie_client=ragie_client)
     
-    # Try to initialize S3 service for URL-based uploads
-    try:
-        ragie_s3_service = get_s3_service()
-        logger.info("✅ S3 service initialized - using S3+URL upload method")
-        return RagieService(ragie_client=ragie_client, ragie_s3_service=ragie_s3_service)
-    except Exception as e:
-        logger.warning(f"⚠️ S3 service initialization failed, falling back to direct upload: {e}")
-        return RagieService(ragie_client=ragie_client)
+    return _ragie_service_instance
 
 
 async def upload_document_background(
@@ -102,7 +118,7 @@ async def upload_document_background(
         ))
         
         # Upload to Ragie - simplified, no Result wrapper
-        logger.info(f"🚀 Starting Ragie upload for {filename}", extra={
+        logger.info(f"[RAGIE] Starting upload for {filename}", extra={
             "upload_id": upload_id,
             "file_name": filename,
             "file_size": len(file_content),
@@ -120,7 +136,7 @@ async def upload_document_background(
             upload_id=upload_id
         )
         
-        logger.info(f"✅ Upload successful for {filename}", extra={
+        logger.info(f"Upload successful for {filename}", extra={
             "upload_id": upload_id,
             "document_id": document.id,
             "document_status": document.status,
@@ -133,7 +149,7 @@ async def upload_document_background(
         
     except (UnsupportedFileTypeError, FileTooLargeError, RagieValidationError, S3ServiceError) as e:
         # Client errors - user's fault
-        logger.warning(f"❌ Upload validation failed for {filename}: {e}", extra={
+        logger.warning(f"Upload validation failed for {filename}: {e}", extra={
             "upload_id": upload_id,
             "file_name": filename,
             "error_type": type(e).__name__,
@@ -199,7 +215,7 @@ async def upload_document(
     
     # Simple validation
     if not file.filename:
-        logger.error("❌ Upload rejected - no filename provided")
+        logger.error("Upload rejected - no filename provided")
         raise HTTPException(status_code=422, detail="File must have a filename")
     
     # Parse metadata if provided
@@ -207,12 +223,12 @@ async def upload_document(
     if metadata:
         try:
             parsed_metadata = json.loads(metadata)
-            logger.info(f"📋 Metadata parsed successfully", extra={
+            logger.info(f"Metadata parsed successfully", extra={
                 "metadata_keys": list(parsed_metadata.keys()) if isinstance(parsed_metadata, dict) else "non-dict",
                 "metadata_size": len(str(parsed_metadata))
             })
         except json.JSONDecodeError as e:
-            logger.error(f"❌ Invalid metadata JSON: {e}", extra={
+            logger.error(f"Invalid metadata JSON: {e}", extra={
                 "metadata_raw": metadata[:200] + "..." if len(metadata) > 200 else metadata
             })
             raise HTTPException(status_code=422, detail="Invalid JSON in metadata field")
@@ -290,7 +306,7 @@ async def get_upload_progress(
 ) -> Dict[str, Any]:
     """Get upload progress with simplified error handling."""
     
-    logger.info(f"📊 Progress check requested", extra={
+    logger.info(f"Progress check requested", extra={
         "upload_id": upload_id,
         "user_id": user_id,
         "organization_id": organization_id
@@ -300,10 +316,10 @@ async def get_upload_progress(
     progress = await redis_service.get_upload_progress(upload_id)
     
     if not progress:
-        logger.warning(f"❌ Progress not found for upload_id: {upload_id}")
+        logger.warning(f"Progress not found for upload_id: {upload_id}")
         raise HTTPException(status_code=404, detail="Upload not found or expired")
     
-    logger.info(f"📊 Current progress status", extra={
+    logger.info(f"Current progress status", extra={
         "upload_id": upload_id,
         "status": progress.status,
         "upload_progress": progress.upload_progress,
@@ -315,7 +331,7 @@ async def get_upload_progress(
     # If upload is complete and we have a document ID, get latest Ragie status
     if progress.document_id and progress.status == "processing":
         try:
-            logger.info(f"🔄 Checking latest Ragie status for document: {progress.document_id}")
+            logger.info(f"Checking latest Ragie status for document: {progress.document_id}")
             document = await ragie_service.get_document(
                 document_id=progress.document_id,
                 organization_id=organization_id
@@ -346,10 +362,10 @@ async def get_upload_progress(
             
         except RagieNotFoundError:
             # Document was deleted or doesn't exist
-            logger.warning(f"❌ Document not found in Ragie: {progress.document_id}")
+            logger.warning(f"Document not found in Ragie: {progress.document_id}")
             pass
         except Exception as e:
-            logger.warning(f"⚠️ Failed to get latest document status: {e}", extra={
+            logger.warning(f"Failed to get latest document status: {e}", extra={
                 "document_id": progress.document_id,
                 "error_type": type(e).__name__
             })
@@ -372,7 +388,7 @@ async def list_documents(
 ) -> DocumentListResponse:
     """List documents with simplified error handling."""
     
-    logger.info(f"📋 list_documents called - user_id: {user_id}, org_id: {organization_id}, limit: {limit}")
+    logger.info(f"list_documents called - user_id: {user_id}, org_id: {organization_id}, limit: {limit}")
     
     try:
         document_list = await ragie_service.list_documents(
@@ -527,7 +543,7 @@ async def query_documents(
         retrieval_result = await ragie_service.retrieve_chunks(
             query=request.query,
             organization_id=organization_id,
-            max_chunks=request.max_chunks or 10,
+            max_chunks=request.max_chunks or 15,
             document_ids=request.document_ids,
             metadata_filter=request.metadata_filter
         )

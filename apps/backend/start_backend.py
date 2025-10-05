@@ -17,7 +17,7 @@ import signal
 
 def signal_handler(sig, frame):
     """Handle Ctrl+C gracefully"""
-    print("\n⚠️  Shutting down server...")
+    print("\nShutting down server...")
     sys.exit(0)
 
 if __name__ == "__main__":
@@ -28,12 +28,12 @@ if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     reload = os.getenv("RELOAD", "true").lower() == "true"
     
-    print("🚀 Starting AI Knowledge Agent Backend...")
-    print("📊 Request logging enabled")
-    print(f"🌐 Server will be available at: http://localhost:{port}")
-    print(f"📋 API docs available at: http://localhost:{port}/docs")
+    print("Starting AI Knowledge Agent Backend...")
+    print("Request logging enabled")
+    print(f"Server will be available at: http://localhost:{port}")
+    print(f"API docs available at: http://localhost:{port}/docs")
     if reload:
-        print("🔄 Hot reload: ENABLED (Ctrl+C to stop)")
+        print("Hot reload: ENABLED (Ctrl+C to stop)")
     print("-" * 60)
     
     try:
@@ -48,5 +48,5 @@ if __name__ == "__main__":
             use_colors=True
         )
     except KeyboardInterrupt:
-        print("\n⚠️  Server stopped by user")
+        print("\nServer stopped by user")
         sys.exit(0)

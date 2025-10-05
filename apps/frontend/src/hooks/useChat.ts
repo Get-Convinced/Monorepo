@@ -22,6 +22,7 @@ interface UseChatReturn {
     // Actions
     sendMessage: (question: string, mode?: ResponseMode, model?: 'gpt-4o' | 'gpt-3.5-turbo') => Promise<void>;
     createNewSession: () => Promise<void>;
+    switchToSession: (sessionId: string) => Promise<void>;
     retryLastMessage: () => Promise<void>;
 
     // Utilities
@@ -167,6 +168,29 @@ export const useChat = (): UseChatReturn => {
         }
     }, [chatApi]);
 
+    // Switch to a specific session
+    const switchToSession = useCallback(async (sessionId: string) => {
+        try {
+            setSessionLoading(true);
+            setMessagesLoading(true);
+            setError(null);
+
+            // Load messages for the selected session
+            const sessionMessages = await chatApi.getSessionMessages(sessionId);
+            setMessages(sessionMessages);
+
+            // Update session state (we'll get the session details from the sessions list)
+            // For now, we'll create a minimal session object
+            setSession(prev => prev ? { ...prev, id: sessionId } : null);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to load session';
+            setError(errorMessage);
+        } finally {
+            setSessionLoading(false);
+            setMessagesLoading(false);
+        }
+    }, [chatApi]);
+
     // Retry last message
     const retryLastMessage = useCallback(async () => {
         if (!lastQuestionRef.current) return;
@@ -184,6 +208,7 @@ export const useChat = (): UseChatReturn => {
         error,
         sendMessage,
         createNewSession,
+        switchToSession,
         retryLastMessage,
         scrollToBottom
     };

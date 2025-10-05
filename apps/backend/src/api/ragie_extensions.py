@@ -20,24 +20,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/ragie", tags=["ragie-extensions"])
 
 
-# Dependency to get Ragie service
-def get_ragie_service() -> RagieService:
-    """Get configured Ragie service instance."""
-    api_key = os.getenv("RAGIE_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "error": {
-                    "code": "CONFIGURATION_ERROR",
-                    "message": "Ragie API key not configured"
-                }
-            }
-        )
-    
-    ragie_client = RagieClient(api_key=api_key)
-    return RagieService(ragie_client=ragie_client)
+# Import the singleton service from main ragie module
+from .ragie import get_ragie_service
 
 
 @router.get(

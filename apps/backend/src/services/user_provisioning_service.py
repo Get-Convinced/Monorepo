@@ -105,7 +105,7 @@ class UserProvisioningService:
         await self.session.commit()
         await self.session.refresh(organization)
         
-        logger.info(f"✅ Created new organization: {organization.id} ({organization.name})")
+        logger.info(f"Created new organization: {organization.id} ({organization.name})")
         return organization
     
     async def _get_or_create_user(
@@ -155,7 +155,7 @@ class UserProvisioningService:
         await self.session.commit()
         await self.session.refresh(user)
         
-        logger.info(f"✅ Created new user: {user.id} ({user.email})")
+        logger.info(f"Created new user: {user.id} ({user.email})")
         return user
     
     async def _ensure_organization_membership(
@@ -202,7 +202,7 @@ class UserProvisioningService:
         await self.session.refresh(membership)
         
         logger.info(
-            f"✅ Created membership: user {user.id} → org {organization.id} (role: {role})"
+            f"Created membership: user {user.id} → org {organization.id} (role: {role})"
         )
         return membership
 

@@ -1,0 +1,176 @@
+name: Backend Deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/backend.yml'
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  test:
+    name: Test Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: apps/backend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: apps/backend
+
+      - name: Run Linting
+        run: npm run lint
+        working-directory: apps/backend
+
+      - name: Run Tests
+        run: npm run test
+        working-directory: apps/backend
+
+  build-and-push-staging:
+    name: Build and Push - Staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get ECR Repository URL
+        id: ecr-url
+        run: |
+          ECR_URL=$(aws ecr describe-repositories --repository-names get-convinced-staging-backend --query 'repositories[0].repositoryUri' --output text)
+          echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: get-convinced-staging-backend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./apps/backend
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster get-convinced-staging-cluster \
+            --service backend \
+            --force-new-deployment
+
+  build-and-push-prod:
+    name: Build and Push - Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [build-and-push-staging]
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get ECR Repository URL
+        id: ecr-url
+        run: |
+          ECR_URL=$(aws ecr describe-repositories --repository-names get-convinced-prod-backend --query 'repositories[0].repositoryUri' --output text)
+          echo "ecr_url=$ECR_URL" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: get-convinced-prod-backend
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./apps/backend
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster get-convinced-prod-cluster \
+            --service backend \
+            --force-new-deployment
+
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [build-and-push-staging, build-and-push-prod]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get ALB DNS Name
+        id: alb-dns
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names get-convinced-staging-alb --query 'LoadBalancers[0].DNSName' --output text)
+          echo "alb_dns=$ALB_DNS" >> $GITHUB_OUTPUT
+
+      - name: Health Check
+        run: |
+          echo "Waiting for service to be healthy..."
+          sleep 60
+          
+          for i in {1..10}; do
+            if curl -f http://${{ steps.alb-dns.outputs.alb_dns }}/health; then
+              echo "Health check passed!"
+              exit 0
+            fi
+            echo "Health check failed, retrying in 30 seconds... (attempt $i/10)"
+            sleep 30
+          done
+          
+          echo "Health check failed after 10 attempts"
+          exit 1

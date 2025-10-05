@@ -23,12 +23,12 @@ app = FastAPI(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    logger.info(f"🔵 {request.method} {request.url}")
+    logger.info(f"[REQUEST] {request.method} {request.url}")
     
     response = await call_next(request)
     
     process_time = time.time() - start_time
-    logger.info(f"🟢 {response.status_code} - {process_time:.4f}s")
+    logger.info(f"[RESPONSE] {response.status_code} - {process_time:.4f}s")
     
     return response
 

@@ -3,7 +3,7 @@
  * Endpoints for RAG-powered chat with source citations
  */
 import { useApiClient } from '../api-client';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 // ============ Types ============
 
@@ -111,7 +111,7 @@ export const useChatApi = () => {
         await apiClient.delete(`/api/v1/chat/session/${sessionId}`);
     }, [apiClient]);
 
-    return {
+    return useMemo(() => ({
         getActiveSession,
         createNewSession,
         sendMessage,
@@ -119,6 +119,18 @@ export const useChatApi = () => {
         getUserSessions,
         archiveSession,
         deleteSession
-    };
+    }), [
+        getActiveSession,
+        createNewSession,
+        sendMessage,
+        getSessionMessages,
+        getUserSessions,
+        archiveSession,
+        deleteSession
+    ]);
 };
+
+
+
+
 

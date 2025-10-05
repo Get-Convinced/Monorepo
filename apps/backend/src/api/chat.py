@@ -144,6 +144,15 @@ async def send_message(
             - 500 if processing fails
     """
     try:
+        logger.info("send_message received", extra={
+            "session_id": session_id,
+            "user_id": user_id,
+            "org_id": organization_id,
+            "model": request.model,
+            "mode": request.mode.value,
+            "question_length": len(request.question),
+            "question_preview": request.question[:500]
+        })
         message = await chat_service.send_message(
             session_id=session_id,
             user_id=user_id,

@@ -54,4 +54,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-shared-database = { path = "../../packages/database", editable = true }
+shared-database = { path = "./packages/database", editable = true }
