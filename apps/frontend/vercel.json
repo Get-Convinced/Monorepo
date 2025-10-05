@@ -1,9 +1,8 @@
 {
-    "buildCommand": "pnpm install && pnpm build",
-    "devCommand": "pnpm dev",
-    "installCommand": "pnpm install",
-    "framework": "nextjs",
-    "outputDirectory": ".next",
-    "nodeVersion": "20.x",
-    "packageManager": "pnpm"
+  "buildCommand": "pnpm install && pnpm build",
+  "devCommand": "pnpm dev",
+  "installCommand": "pnpm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "packageManager": "pnpm"
 }
