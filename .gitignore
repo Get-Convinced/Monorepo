@@ -57,3 +57,12 @@ temp/
 # Local configuration
 local/
 local.*
+
+# Large model files (should be downloaded at runtime)
+apps/document-processor/docling-models/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.h5
+*.onnx
