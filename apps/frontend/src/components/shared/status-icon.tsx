@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle, Clock, FileText, Layers, Sparkles, Hash, Search, FileSearch, Tag, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, FileText, Layers, Sparkles, Hash, FileSearch, Tag, Loader2 } from "lucide-react";
 
 type RagieStatus =
     | "pending"

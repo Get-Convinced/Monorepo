@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React from "react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,11 +14,11 @@ import { useAuth } from "@frontegg/nextjs";
 import { useOrganizations } from "@/hooks/use-organization-queries";
 import { useRouter } from "next/navigation";
 
-interface Organization {
-    id: string;
-    name: string;
-    role?: string;
-}
+// interface Organization {
+//     id: string;
+//     name: string;
+//     role?: string;
+// }
 
 export function OrganizationSelector() {
     const { user } = useAuth();
