@@ -1,0 +1,26 @@
+# Terraform Variables Template
+# Copy this file to terraform.tfvars and fill in your actual values
+# DO NOT COMMIT terraform.tfvars to git!
+
+# AWS Configuration
+aws_access_key_id     = "YOUR_AWS_ACCESS_KEY_ID"
+aws_secret_access_key = "YOUR_AWS_SECRET_ACCESS_KEY"
+
+# Environment
+environment = "prod"
+
+# Frontegg Configuration
+frontegg_api_key              = "YOUR_FRONTEGG_API_KEY"
+frontegg_app_id               = "YOUR_FRONTEGG_APP_ID"
+frontegg_client_id            = "YOUR_FRONTEGG_CLIENT_ID"
+frontegg_encryption_password  = "YOUR_FRONTEGG_ENCRYPTION_PASSWORD"
+
+# OpenAI Configuration
+openai_api_key = "YOUR_OPENAI_API_KEY"
+
+# Ragie Configuration
+ragie_api_key            = "YOUR_RAGIE_API_KEY"
+ragie_s3_bucket_prefix   = "YOUR_RAGIE_S3_BUCKET_PREFIX"
+
+# S3 Configuration
+s3_bucket = "YOUR_S3_BUCKET_NAME"

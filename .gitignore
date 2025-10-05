@@ -1,6 +1,8 @@
 # Environment files with secrets
 infra/envs/*/backend.env
 infra/envs/*/*.env
+infra/envs/*/terraform.tfvars
+*.tfvars
 *.env
 .env*
 
