@@ -3,5 +3,8 @@
     "devCommand": "pnpm dev",
     "installCommand": "pnpm install",
     "framework": "nextjs",
-    "outputDirectory": ".next"
+    "outputDirectory": ".next",
+    "env": {
+        "NEXT_PUBLIC_API_BASE_URL": "https://api.getconvinced.ai"
+    }
 }

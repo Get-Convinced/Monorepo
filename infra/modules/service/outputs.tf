@@ -120,3 +120,19 @@ output "cloudwatch_log_group_arn" {
   description = "ARN of the CloudWatch log group"
   value       = aws_cloudwatch_log_group.ecs.arn
 }
+
+# Certificate outputs
+output "certificate_arn" {
+  description = "ARN of the ACM certificate"
+  value       = aws_acm_certificate.backend.arn
+}
+
+output "certificate_domain_name" {
+  description = "Domain name of the ACM certificate"
+  value       = aws_acm_certificate.backend.domain_name
+}
+
+output "certificate_validation_records" {
+  description = "DNS validation records for the certificate"
+  value       = aws_acm_certificate.backend.domain_validation_options
+}

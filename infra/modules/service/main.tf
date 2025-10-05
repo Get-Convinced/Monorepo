@@ -433,31 +433,27 @@ resource "aws_lb_target_group" "backend" {
   })
 }
 
-# ALB Listener
-resource "aws_lb_listener" "backend" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
-  }
+# ACM Certificate for HTTPS
+resource "aws_acm_certificate" "backend" {
+  domain_name       = "*.getconvinced.ai"
+  validation_method = "DNS"
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-alb-listener"
+    Name = "${var.project_name}-${var.environment}-certificate"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-# HTTPS Listener (if certificate provided)
+# ALB Listener for HTTPS
 resource "aws_lb_listener" "backend_https" {
-  count = var.certificate_arn != "" ? 1 : 0
-
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.certificate_arn
+  certificate_arn   = aws_acm_certificate.backend.arn
 
   default_action {
     type             = "forward"
@@ -469,16 +465,15 @@ resource "aws_lb_listener" "backend_https" {
   })
 }
 
-# HTTP to HTTPS Redirect (if certificate provided)
-resource "aws_lb_listener" "backend_redirect" {
-  count = var.certificate_arn != "" ? 1 : 0
-
+# ALB Listener for HTTP (redirect to HTTPS)
+resource "aws_lb_listener" "backend_http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type = "redirect"
+
     redirect {
       port        = "443"
       protocol    = "HTTPS"
@@ -487,9 +482,10 @@ resource "aws_lb_listener" "backend_redirect" {
   }
 
   tags = merge(var.tags, {
-    Name = "${var.project_name}-${var.environment}-alb-listener-redirect"
+    Name = "${var.project_name}-${var.environment}-alb-listener-http"
   })
 }
+
 
 # ECS Service
 resource "aws_ecs_service" "backend" {
@@ -511,7 +507,7 @@ resource "aws_ecs_service" "backend" {
     container_port   = var.backend_port
   }
 
-  depends_on = [aws_lb_listener.backend]
+  depends_on = [aws_lb_listener.backend_https]
 
   tags = merge(var.tags, {
     Name = "${var.project_name}-${var.environment}-backend-service"
