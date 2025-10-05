@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,7 +8,7 @@ import { UserSettingsForm } from "@/components/settings/user-settings-form";
 import { OrganizationSettingsForm } from "@/components/settings/organization-settings-form";
 import { User, Building2 } from "lucide-react";
 
-export default function SettingsPage() {
+function SettingsContent() {
     const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState("profile");
 
@@ -24,20 +24,20 @@ export default function SettingsPage() {
     }, [searchParams]);
 
     return (
-        <div className="container mx-auto py-6 px-4">
+        <div className="container px-4 py-6 mx-auto">
             <div className="mb-6">
                 <h1 className="text-3xl font-bold">Settings</h1>
                 <p className="text-muted-foreground">Manage your account and organization settings</p>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="profile" className="flex items-center gap-2">
-                        <User className="h-4 w-4" />
+                <TabsList className="grid grid-cols-2 w-full">
+                    <TabsTrigger value="profile" className="flex gap-2 items-center">
+                        <User className="w-4 h-4" />
                         Profile
                     </TabsTrigger>
-                    <TabsTrigger value="organization" className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
+                    <TabsTrigger value="organization" className="flex gap-2 items-center">
+                        <Building2 className="w-4 h-4" />
                         Organization
                     </TabsTrigger>
                 </TabsList>
@@ -67,5 +67,13 @@ export default function SettingsPage() {
                 </TabsContent>
             </Tabs>
         </div>
+    );
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={<div>Loading settings...</div>}>
+            <SettingsContent />
+        </Suspense>
     );
 }

@@ -1,24 +1,13 @@
 "use client";
 import { useLoginWithRedirect } from "@frontegg/nextjs";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-
-interface LoginProps {
-    isHosted: boolean;
-}
-const Login = (props: LoginProps) => {
+const Login = () => {
     const loginWithRedirect = useLoginWithRedirect();
-    const router = useRouter();
 
     const login = () => {
-        console.log("🔐 Login button clicked, isHosted:", props.isHosted);
-        if (props.isHosted) {
-            console.log("🔐 Using hosted login");
-            loginWithRedirect();
-        } else {
-            console.log("🔐 Redirecting to account login");
-            router.push("/account/login");
-        }
+        console.log("🔐 Login button clicked");
+        console.log("🔐 Using hosted login");
+        loginWithRedirect();
     };
     return (
         <section className="flex justify-center items-center p-4 min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
