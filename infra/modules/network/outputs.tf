@@ -15,10 +15,11 @@ output "internet_gateway_id" {
   value       = aws_internet_gateway.main.id
 }
 
-output "nat_gateway_ids" {
-  description = "IDs of the NAT Gateways"
-  value       = aws_nat_gateway.main[*].id
-}
+# NAT Gateway outputs disabled (resource commented out)
+# output "nat_gateway_ids" {
+#   description = "IDs of the NAT Gateways"
+#   value       = aws_nat_gateway.main[*].id
+# }
 
 output "public_subnet_ids" {
   description = "IDs of the public subnets"
@@ -35,10 +36,11 @@ output "public_route_table_id" {
   value       = aws_route_table.public.id
 }
 
-output "private_route_table_ids" {
-  description = "IDs of the private route tables"
-  value       = aws_route_table.private[*].id
-}
+# Private route table outputs disabled (resource commented out)
+# output "private_route_table_ids" {
+#   description = "IDs of the private route tables"
+#   value       = aws_route_table.private[*].id
+# }
 
 output "alb_security_group_id" {
   description = "ID of the ALB security group"
