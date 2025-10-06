@@ -90,7 +90,7 @@ resource "aws_db_instance" "main" {
       multi_az = false
 
       # Backup - 7 day retention
-      backup_retention_period = 7
+      backup_retention_period = 1  # Reduced from 7 to save costs for MVP
       backup_window          = "03:00-04:00"
       maintenance_window     = "sun:04:00-sun:05:00"
 
