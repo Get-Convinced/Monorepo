@@ -527,6 +527,11 @@ class ChatSource(Base):
     chunk_text = Column(Text, nullable=True)  # Denormalized for fast display
     relevance_score = Column(Float, nullable=True)
     
+    # Source usage tracking (NEW)
+    is_used = Column(Boolean, default=False, nullable=False)  # Did LLM actually use this source?
+    usage_reason = Column(Text, nullable=True)  # Why LLM used this source
+    source_number = Column(Integer, nullable=True)  # Original retrieval order (1-20)
+    
     # Additional metadata
     source_metadata = Column(JSON, nullable=True)  # Future: section, paragraph, confidence
     

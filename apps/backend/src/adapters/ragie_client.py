@@ -172,22 +172,39 @@ class RagieClient:
             headers.pop("Content-Type", None)
         
         try:
-            logger.info(f"🌐 Making {method} request to Ragie API", extra={
+            # Log detailed request information for debugging
+            logger.info(f"Making {method} request to Ragie API", extra={
                 "url": url,
                 "partition": partition,
                 "has_files": bool(files),
                 "has_json": bool(json_data),
                 "has_params": bool(params),
                 "has_data": bool(data),
-                "headers": {k: v for k, v in headers.items() if k.lower() != 'authorization'},  # Don't log auth header
+                "headers": {k: v for k, v in headers.items() if k.lower() != 'authorization'},
                 "json_payload": json_data,
-                "request_details": {
-                    "method": method,
-                    "endpoint": url,
-                    "content_type": headers.get("Content-Type"),
-                    "has_auth": "Authorization" in headers
-                }
+                "form_data_keys": list(data.keys()) if data else None,
+                "form_data_values": {k: (v[:100] + "..." if isinstance(v, str) and len(v) > 100 else v) for k, v in data.items()} if data else None,
+                "file_info": {k: {"filename": v[0], "size": len(v[1]), "content_type": v[2]} for k, v in files.items()} if files else None
             })
+            
+            # Generate curl command for debugging (without sensitive data)
+            if files:
+                curl_cmd_parts = [f"curl -X {method}"]
+                curl_cmd_parts.append(f'"{url}"')
+                curl_cmd_parts.append('-H "Authorization: Bearer YOUR_RAGIE_API_KEY"')
+                for k, v in headers.items():
+                    if k.lower() not in ['authorization', 'content-type']:
+                        curl_cmd_parts.append(f'-H "{k}: {v}"')
+                if data:
+                    for k, v in data.items():
+                        curl_cmd_parts.append(f'-F "{k}={v}"')
+                if files:
+                    for k, v in files.items():
+                        curl_cmd_parts.append(f'-F "{k}=@{v[0]}"')
+                
+                logger.info(f"Equivalent curl command (replace YOUR_RAGIE_API_KEY and file path):", extra={
+                    "curl_command": " \\\n  ".join(curl_cmd_parts)
+                })
             
             response = await self.client.request(
                 method=method,
@@ -199,11 +216,20 @@ class RagieClient:
                 data=data
             )
             
-            logger.info(f"📡 Ragie API response", extra={
+            # Log response with body for errors
+            response_body = None
+            if response.status_code >= 400:
+                try:
+                    response_body = response.text
+                except:
+                    response_body = "<unable to decode>"
+            
+            logger.info(f"Ragie API response", extra={
                 "status_code": response.status_code,
                 "response_headers": dict(response.headers),
                 "content_length": len(response.content),
-                "url": url
+                "url": url,
+                "response_body": response_body if response.status_code >= 400 else None
             })
             
             # Handle successful responses
@@ -212,6 +238,12 @@ class RagieClient:
             
             # Handle client errors (4xx)
             if 400 <= response.status_code < 500:
+                logger.error(f"Ragie API client error (4xx)", extra={
+                    "status_code": response.status_code,
+                    "response_body": response_body,
+                    "request_url": url,
+                    "request_method": method
+                })
                 await self._handle_client_error(response)
             
             # Handle server errors (5xx)
@@ -326,26 +358,33 @@ class RagieClient:
             "file": (filename, file_content, content_type)
         }
         
-        # Add metadata as form data if provided (must be JSON string)
+        # Add metadata and partition as form data if provided
         data = {}
+        
+        # Add partition to form data (not as header, as per multipart/form-data)
+        data["partition"] = partition
+        
         if metadata:
+            # Ragie expects metadata as individual form fields, not as a JSON string
+            # Each metadata key should be sent as metadata[key]=value
             import json
-            data["metadata"] = json.dumps(metadata)
+            for key, value in metadata.items():
+                data[f"metadata[{key}]"] = str(value) if not isinstance(value, (list, dict)) else json.dumps(value)
             logger.info("Adding metadata to request", extra={
-                "metadata_json": data["metadata"],
-                "metadata_length": len(data["metadata"])
+                "metadata_keys": list(metadata.keys()),
+                "metadata_count": len(metadata)
             })
         
         try:
             response = await self._make_request(
                 method="POST",
                 endpoint="/documents",
-                partition=partition,
+                partition=partition,  # Still pass for header
                 files=files,
                 data=data  # Pass form data along with files
             )
             
-            logger.info(f"🌐 Ragie API response received", extra={
+            logger.info(f"Ragie API response received", extra={
                 "status_code": response.status_code,
                 "headers": dict(response.headers),
                 "response_size": len(response.content)
@@ -353,7 +392,7 @@ class RagieClient:
             
             document_data = response.json()
             
-            logger.info(f"📄 Ragie document data", extra={
+            logger.info(f"Ragie document data", extra={
                 "raw_response": document_data,
                 "response_keys": list(document_data.keys()) if isinstance(document_data, dict) else "non-dict"
             })
@@ -370,7 +409,7 @@ class RagieClient:
             return document
             
         except Exception as e:
-            logger.error(f"💥 Ragie upload failed", extra={
+            logger.error(f"Ragie upload failed", extra={
                 "file_name": filename,
                 "partition": partition,
                 "error_type": type(e).__name__,
@@ -435,7 +474,7 @@ class RagieClient:
                 json_data=payload
             )
             
-            logger.info(f"🌐 Ragie URL API response received", extra={
+            logger.info(f"Ragie URL API response received", extra={
                 "status_code": response.status_code,
                 "headers": dict(response.headers),
                 "response_size": len(response.content)
@@ -443,7 +482,7 @@ class RagieClient:
             
             document_data = response.json()
             
-            logger.info(f"📄 Ragie URL document data", extra={
+            logger.info(f"Ragie URL document data", extra={
                 "raw_response": document_data,
                 "response_keys": list(document_data.keys()) if isinstance(document_data, dict) else "non-dict"
             })
@@ -461,7 +500,7 @@ class RagieClient:
             return document
             
         except Exception as e:
-            logger.error(f"💥 Ragie URL document creation failed", extra={
+            logger.error(f"Ragie URL document creation failed", extra={
                 "url": url[:100] + "..." if len(url) > 100 else url,
                 "partition": partition,
                 "error_type": type(e).__name__,
@@ -581,35 +620,84 @@ class RagieClient:
         partition: str,
         max_chunks: int = 15,
         metadata_filter: Optional[Dict[str, Any]] = None,
-        rerank: bool = False,
-        max_chunks_per_document: Optional[int] = None
+        rerank: bool = True,  # Changed default to True for better quality
+        max_chunks_per_document: Optional[int] = None,
+        recency_bias: bool = False,  # NEW: Enable recency bias for time-sensitive queries
+        min_score_threshold: float = 0.0  # NEW: Filter low-quality results
     ) -> RagieRetrievalResult:
         """
-        Retrieve relevant document chunks for RAG.
+        Retrieve relevant document chunks for RAG with enhanced quality controls.
         
         Args:
             query: Search query
             partition: Organization partition (also sent in body per spec)
             max_chunks: Maximum number of chunks to return (maps to top_k)
-            metadata_filter: Metadata filter (maps to filter)
-            rerank: Enable reranking for higher relevance
-            max_chunks_per_document: Optional per-document cap
+            metadata_filter: Metadata filter (maps to filter) - supports $eq, $ne, $gt, $gte, $lt, $lte, $in, $nin
+            rerank: Enable reranking for higher relevance (default: True for better quality)
+            max_chunks_per_document: Optional per-document cap for diversity
+            recency_bias: Favor more recent documents (useful for time-sensitive queries)
+            min_score_threshold: Minimum relevance score threshold (0.0-1.0)
             
         Returns:
             RagieRetrievalResult with scored_chunks per spec
+            
+        Raises:
+            RagieAPIError: On API errors
+            
+        Example:
+            ```python
+            # Basic retrieval with reranking
+            result = await client.retrieve_chunks(
+                query="What are our Q4 sales targets?",
+                partition="acme_corp",
+                max_chunks=20,
+                rerank=True
+            )
+            
+            # Time-sensitive query with recency bias
+            result = await client.retrieve_chunks(
+                query="Latest product updates",
+                partition="acme_corp",
+                recency_bias=True,
+                min_score_threshold=0.7
+            )
+            
+            # Filtered retrieval with diversity
+            result = await client.retrieve_chunks(
+                query="Engineering guidelines",
+                partition="acme_corp",
+                metadata_filter={"department": {"$eq": "engineering"}},
+                max_chunks_per_document=2
+            )
+            ```
         """
         # Build request per OpenAPI RetrieveParams
         request_data: Dict[str, Any] = {
             "query": query,
             "top_k": max_chunks,
             "partition": partition,
-            "rerank": rerank
+            "rerank": rerank,
+            "recency_bias": recency_bias  # NEW: Support for recency bias
         }
         
+        # Add optional filters
         if metadata_filter:
             request_data["filter"] = metadata_filter
-        if isinstance(max_chunks_per_document, int):
+        if isinstance(max_chunks_per_document, int) and max_chunks_per_document > 0:
             request_data["max_chunks_per_document"] = max_chunks_per_document
+        
+        self.logger.info(
+            "Retrieving chunks from Ragie",
+            extra={
+                "partition": partition,
+                "query_length": len(query),
+                "max_chunks": max_chunks,
+                "rerank": rerank,
+                "recency_bias": recency_bias,
+                "has_filter": bool(metadata_filter),
+                "min_score": min_score_threshold
+            }
+        )
         
         response = await self._make_request(
             method="POST",
@@ -620,18 +708,41 @@ class RagieClient:
         
         data = response.json() or {}
         scored_items: List[RagieScoredChunk] = []
+        filtered_count = 0
+        
         for item in data.get("scored_chunks", []) or []:
+            score = float(item.get("score", 0))
+            
+            # NEW: Filter by score threshold
+            if score < min_score_threshold:
+                filtered_count += 1
+                continue
+            
             scored_items.append(RagieScoredChunk(
                 id=item.get("id"),
                 index=item.get("index"),
                 text=item.get("text", ""),
-                score=float(item.get("score", 0)),
+                score=score,
                 metadata=item.get("metadata") or {},
                 document_id=item.get("document_id"),
                 document_name=item.get("document_name", ""),
                 document_metadata=item.get("document_metadata") or {},
                 links=item.get("links") or {}
             ))
+        
+        if filtered_count > 0:
+            self.logger.info(
+                f"Filtered {filtered_count} chunks below score threshold {min_score_threshold}"
+            )
+        
+        self.logger.info(
+            f"Retrieved {len(scored_items)} chunks from Ragie",
+            extra={
+                "chunk_count": len(scored_items),
+                "filtered_count": filtered_count,
+                "avg_score": sum(c.score for c in scored_items) / len(scored_items) if scored_items else 0
+            }
+        )
         
         return RagieRetrievalResult(scored_chunks=scored_items)
     

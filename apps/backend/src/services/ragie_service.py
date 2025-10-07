@@ -421,33 +421,86 @@ class RagieService:
         document_ids: Optional[List[str]] = None,
         metadata_filter: Optional[Dict[str, Any]] = None,
         min_score: Optional[float] = None,
-        rerank: bool = False
+        rerank: bool = True,  # Changed default to True for better quality
+        max_chunks_per_document: Optional[int] = None,  # NEW: Enforce document diversity
+        recency_bias: bool = False,  # NEW: Time-sensitive queries
+        use_cache: bool = True  # NEW: Cache repeated queries
     ) -> RagieRetrievalResult:
         """
-        Retrieve relevant document chunks for RAG.
+        Retrieve relevant document chunks for RAG with advanced features.
         
         Args:
             query: Search query
             organization_id: Organization ID (partition)
-            max_chunks: Maximum number of chunks to return
+            max_chunks: Maximum number of chunks to return (adaptive based on query)
             document_ids: Optional list of document IDs to filter by (not supported directly; use metadata filter)
-            metadata_filter: Optional metadata filters
-            min_score: Optional minimum relevance score threshold (client-side filter)
-            rerank: Enable post-retrieval reranking for better relevance
+            metadata_filter: Optional metadata filters supporting $eq, $ne, $gt, $gte, $lt, $lte, $in, $nin
+            min_score: Optional minimum relevance score threshold (0.0-1.0)
+            rerank: Enable reranking for higher relevance (default: True)
+            max_chunks_per_document: Max chunks per document (ensures diversity)
+            recency_bias: Favor recent documents (useful for news, updates, etc.)
+            use_cache: Enable Redis caching for repeated queries (default: True)
             
         Returns:
             RagieRetrievalResult: Retrieval results with scored chunks
             
         Raises:
             RagieServiceError: If retrieval fails
+            
+        Examples:
+            # Basic retrieval with caching and reranking
+            result = await service.retrieve_chunks(
+                query="What are our Q4 goals?",
+                organization_id="acme_corp"
+            )
+            
+            # Time-sensitive query with recency bias
+            result = await service.retrieve_chunks(
+                query="Latest product announcements",
+                organization_id="acme_corp",
+                recency_bias=True,
+                min_score=0.7
+            )
+            
+            # Diverse retrieval with document cap
+            result = await service.retrieve_chunks(
+                query="Engineering best practices",
+                organization_id="acme_corp",
+                max_chunks=30,
+                max_chunks_per_document=3,  # Max 3 chunks per doc
+                metadata_filter={"department": {"$eq": "engineering"}}
+            )
         """
         try:
+            # Generate cache key
+            cache_key = None
+            if use_cache and self.redis_service:
+                import hashlib
+                cache_params = f"{query}:{organization_id}:{max_chunks}:{rerank}:{recency_bias}"
+                if metadata_filter:
+                    cache_params += f":{str(metadata_filter)}"
+                cache_hash = hashlib.sha256(cache_params.encode()).hexdigest()[:16]
+                cache_key = f"retrieval:{organization_id}:{cache_hash}"
+                
+                # Try cache first
+                try:
+                    cached = await self.redis_service.get(cache_key)
+                    if cached:
+                        logger.info("Cache hit for retrieval", extra={"cache_key": cache_key})
+                        return RagieRetrievalResult(**cached)
+                except Exception as e:
+                    logger.warning(f"Cache lookup failed: {e}")
+            
             logger.info("Retrieving chunks from Ragie",
                        extra={
                            "query": query[:100] + "..." if len(query) > 100 else query,
                            "organization_id": organization_id,
                            "max_chunks": max_chunks,
-                           "rerank": rerank
+                           "rerank": rerank,
+                           "recency_bias": recency_bias,
+                           "max_chunks_per_doc": max_chunks_per_document,
+                           "has_filter": bool(metadata_filter),
+                           "use_cache": use_cache
                        })
             
             result = await self.ragie_client.retrieve_chunks(
@@ -455,23 +508,40 @@ class RagieService:
                 partition=organization_id,
                 max_chunks=max_chunks,
                 metadata_filter=metadata_filter,
-                rerank=rerank
+                rerank=rerank,
+                max_chunks_per_document=max_chunks_per_document,
+                recency_bias=recency_bias,
+                min_score_threshold=min_score or 0.0
             )
             
-            # Client-side score filtering if requested
-            if min_score is not None and hasattr(result, "scored_chunks"):
-                original_len = len(result.scored_chunks)
-                result.scored_chunks = [
-                    chunk for chunk in result.scored_chunks
-                    if float(chunk.get("score", 0)) >= float(min_score)
-                ]
-                logger.info("Applied min_score filter",
-                            extra={"kept": len(result.scored_chunks), "original": original_len, "min_score": min_score})
+            # Cache successful results
+            if use_cache and cache_key and self.redis_service:
+                try:
+                    # Cache for 5 minutes
+                    await self.redis_service.set(
+                        cache_key, 
+                        result.model_dump(),
+                        ttl_seconds=300
+                    )
+                except Exception as e:
+                    logger.warning(f"Cache storage failed: {e}")
             
-            logger.info("Retrieved chunks successfully", extra={
-                "organization_id": organization_id,
-                "chunks": len(getattr(result, "scored_chunks", []))
-            })
+            # Log retrieval quality metrics
+            if hasattr(result, "scored_chunks") and result.scored_chunks:
+                scores = [chunk.score for chunk in result.scored_chunks]
+                unique_docs = len(set(c.document_id for c in result.scored_chunks))
+                logger.info(
+                    "Retrieval completed",
+                    extra={
+                        "chunk_count": len(result.scored_chunks),
+                        "avg_score": sum(scores) / len(scores),
+                        "min_score": min(scores),
+                        "max_score": max(scores),
+                        "unique_docs": unique_docs,
+                        "diversity_ratio": unique_docs / len(result.scored_chunks) if result.scored_chunks else 0
+                    }
+                )
+            
             return result
             
         except RagieError as e:

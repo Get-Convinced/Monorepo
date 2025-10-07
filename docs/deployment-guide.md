@@ -3,6 +3,10 @@
 ## 🎯 **Overview**
 This guide covers the complete deployment process for the AI Knowledge Agent infrastructure and applications using Terraform and AWS.
 
+**Related Documentation:**
+- [Production Debugging Guide](../apps/backend/docs/DEBUGGING_PRODUCTION.md) - Troubleshooting and monitoring production issues
+- [GitHub Secrets Setup](./github-secrets-setup.md) - Configuring CI/CD secrets
+
 ## 🏗️ **Infrastructure Architecture**
 
 ### **AWS Services Used**

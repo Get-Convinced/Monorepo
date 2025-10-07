@@ -84,13 +84,17 @@ def get_ragie_service() -> RagieService:
     if _ragie_service_instance is None:
         ragie_client = get_ragie_client()
         
-        # Try to initialize S3 service for URL-based uploads
+        # Use S3+URL approach (avoids multipart/form-data 415 errors)
         try:
-            ragie_s3_service = get_s3_service()
-            logger.info("S3 service initialized - using S3+URL upload method")
-            _ragie_service_instance = RagieService(ragie_client=ragie_client, ragie_s3_service=ragie_s3_service)
+            s3_service = get_s3_service()  # No arguments needed
+            logger.info("Initializing Ragie service with S3+URL upload method")
+            _ragie_service_instance = RagieService(
+                ragie_client=ragie_client,
+                ragie_s3_service=s3_service
+            )
         except Exception as e:
-            logger.warning(f"S3 service initialization failed, falling back to direct upload: {e}")
+            logger.warning(f"Failed to initialize S3 service, falling back to direct upload: {e}")
+            logger.info("Initializing Ragie service without S3 (direct upload mode)")
             _ragie_service_instance = RagieService(ragie_client=ragie_client)
     
     return _ragie_service_instance

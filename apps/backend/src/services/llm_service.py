@@ -93,12 +93,13 @@ Instructions:
 - You may elaborate on topics using your general knowledge when helpful
 - Always indicate when you're providing information beyond the source documents"""
     
-    def _format_context(self, chunks: List[Dict[str, Any]]) -> str:
+    def _format_context(self, chunks: List[Dict[str, Any]], numbered: bool = False) -> str:
         """
         Format Ragie chunks into context string.
         
         Args:
             chunks: List of document chunks with metadata
+            numbered: If True, include source numbers for function calling
             
         Returns:
             Formatted context string
@@ -131,6 +132,198 @@ Instructions:
             Number of tokens
         """
         return len(self.encoding.encode(text))
+    
+    async def generate_response_with_sources(
+        self,
+        question: str,
+        chunks: List[Dict[str, Any]],
+        mode: ResponseMode = ResponseMode.STRICT,
+        model: str = "gpt-4o",
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        use_function_calling: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Generate response with structured source tracking using OpenAI function calling.
+        
+        Args:
+            question: User question
+            chunks: Retrieved document chunks
+            mode: Response generation mode
+            model: OpenAI model to use
+            conversation_history: Previous messages for context
+            use_function_calling: Use function calling for structured output
+            
+        Returns:
+            Dict with response content, sources_used, token usage, and metadata
+            
+        Raises:
+            LLMServiceError: If generation fails
+        """
+        start_time = time.time()
+        
+        try:
+            # Build messages
+            system_prompt = self._build_system_prompt(mode) + """
+
+When answering, you MUST use the respond_with_sources function to provide:
+1. Your answer in markdown format
+2. A list of sources you actually used, with the source number and why you used it
+
+Only include sources that directly contributed to your answer."""
+            
+            context = self._format_context(chunks, numbered=True)
+            temperature = self.TEMPERATURE_MAP[mode]
+            
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            # Add conversation history (last 5 messages)
+            if conversation_history:
+                messages.extend(conversation_history[-5:])
+            
+            # Add current question with context
+            user_message = f"{context}\n\nQuestion: {question}"
+            messages.append({"role": "user", "content": user_message})
+            
+            # Define function for structured output
+            functions = [{
+                "name": "respond_with_sources",
+                "description": "Respond to the user's question with source citations",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "Your answer in markdown format"
+                        },
+                        "sources_used": {
+                            "type": "array",
+                            "description": "List of sources actually used in your answer",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "source_num": {
+                                        "type": "integer",
+                                        "description": "Source number from the context (1-based)"
+                                    },
+                                    "reason": {
+                                        "type": "string",
+                                        "description": "Brief explanation of why you used this source"
+                                    }
+                                },
+                                "required": ["source_num", "reason"]
+                            }
+                        }
+                    },
+                    "required": ["message", "sources_used"]
+                }
+            }]
+            
+            # Check token limit
+            total_prompt_tokens = sum(self.count_tokens(str(msg.get("content", ""))) for msg in messages)
+            model_limit = self.MODEL_TOKEN_LIMITS.get(model, 16385)
+            
+            if total_prompt_tokens > model_limit - 1500:
+                raise TokenLimitExceededError(
+                    f"Prompt tokens ({total_prompt_tokens}) exceed model limit ({model_limit})"
+                )
+            
+            logger.info(
+                "Generating LLM response with function calling",
+                extra={
+                    "model": model,
+                    "mode": mode.value,
+                    "temperature": temperature,
+                    "chunks_count": len(chunks),
+                    "use_function_calling": use_function_calling
+                }
+            )
+            
+            # Call OpenAI with function calling
+            response = await self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                functions=functions if use_function_calling else None,
+                function_call={"name": "respond_with_sources"} if use_function_calling else None,
+                temperature=temperature,
+                max_tokens=1500,
+                stream=False,
+                timeout=30.0
+            )
+            
+            choice = response.choices[0]
+            usage = response.usage
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            
+            # Parse function call response
+            if use_function_calling and choice.message.function_call:
+                import json
+                try:
+                    function_args = json.loads(choice.message.function_call.arguments)
+                    content = function_args.get("message", "")
+                    sources_used = function_args.get("sources_used", [])
+                    
+                    logger.info(
+                        "LLM response generated with sources",
+                        extra={
+                            "tokens_total": usage.total_tokens,
+                            "sources_used_count": len(sources_used),
+                            "processing_time_ms": processing_time_ms
+                        }
+                    )
+                    
+                    return {
+                        "content": content,
+                        "sources_used": sources_used,
+                        "tokens_prompt": usage.prompt_tokens,
+                        "tokens_completion": usage.completion_tokens,
+                        "tokens_total": usage.total_tokens,
+                        "model": model,
+                        "temperature": temperature,
+                        "processing_time_ms": processing_time_ms,
+                        "used_function_calling": True
+                    }
+                except (json.JSONDecodeError, KeyError) as e:
+                    logger.warning(f"Failed to parse function call response: {e}. Retrying without function calling.")
+                    # Fallback: retry without function calling
+                    return await self.generate_response_with_sources(
+                        question=question,
+                        chunks=chunks,
+                        mode=mode,
+                        model=model,
+                        conversation_history=conversation_history,
+                        use_function_calling=False
+                    )
+            else:
+                # Fallback: use plain text response
+                content = choice.message.content or ""
+                logger.info(
+                    "LLM response generated (no function calling)",
+                    extra={
+                        "tokens_total": usage.total_tokens,
+                        "processing_time_ms": processing_time_ms
+                    }
+                )
+                
+                return {
+                    "content": content,
+                    "sources_used": [],  # Empty - mark all as potentially used
+                    "tokens_prompt": usage.prompt_tokens,
+                    "tokens_completion": usage.completion_tokens,
+                    "tokens_total": usage.total_tokens,
+                    "model": model,
+                    "temperature": temperature,
+                    "processing_time_ms": processing_time_ms,
+                    "used_function_calling": False
+                }
+            
+        except OpenAIError as e:
+            logger.error(f"OpenAI API error: {e}")
+            raise LLMServiceError(f"LLM generation failed: {e}")
+        except TokenLimitExceededError:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected LLM error: {e}")
+            raise LLMServiceError(f"Unexpected error: {e}")
     
     async def generate_response(
         self,

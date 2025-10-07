@@ -32,18 +32,24 @@ async def log_requests(request: Request, call_next):
     
     return response
 
-# CORS for frontend - Allow all localhost ports for development
+# CORS for frontend - Allow localhost for development and Vercel for production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        # Development origins
         "http://localhost:3000",
         "http://127.0.0.1:3000", 
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "http://localhost:3002",
-        "http://127.0.0.1:3002"
+        "http://127.0.0.1:3002",
+        # Production origins - Vercel deployments
+        "https://get-convinced.vercel.app",
+        "https://get-convinced-git-main-get-convinced.vercel.app",
+        "https://monorepo-frontend.vercel.app",
+        "https://get-convinced-kb.vercel.app"
     ],
-    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1):300[0-9]$",
+    allow_origin_regex=r"^(http://(localhost|127\.0\.0\.1):300[0-9]|https://.*\.vercel\.app)$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],

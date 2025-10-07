@@ -85,6 +85,42 @@ export function MessageArea({ messages, loading, error, onRetry }: MessageAreaPr
                                             />
                                         </div>
 
+                                        {/* Inline source citations (for assistant messages only) */}
+                                        {message.role === "assistant" && message.sources && message.sources.length > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-border/50">
+                                                {(() => {
+                                                    const usedSources = message.sources.filter(s => s.is_used);
+                                                    if (usedSources.length > 0) {
+                                                        return (
+                                                            <div className="space-y-1">
+                                                                <p className="text-xs font-medium text-muted-foreground mb-2">
+                                                                    Sources used in this response:
+                                                                </p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {usedSources.map((source) => (
+                                                                        <button
+                                                                            key={source.id}
+                                                                            onClick={() => handleShowSources(message.sources, message.content)}
+                                                                            className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
+                                                                            title={source.usage_reason || "View source details"}
+                                                                        >
+                                                                            <span className="font-mono font-semibold text-green-700 dark:text-green-300">
+                                                                                [{source.source_number || 1}]
+                                                                            </span>
+                                                                            <span className="text-green-600 dark:text-green-400 truncate max-w-[120px]">
+                                                                                {source.document_name}
+                                                                            </span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+                                        )}
+
                                         {message.status === "failed" && message.error_message && (
                                             <div className="mt-2 p-2 bg-destructive/10 rounded text-xs text-destructive">
                                                 <AlertCircle className="w-3 h-3 inline mr-1" />

@@ -41,6 +41,11 @@ class ChatSource(BaseModel):
     chunk_text: str
     relevance_score: float
     
+    # Source usage tracking (NEW)
+    is_used: bool = False  # Did LLM actually use this source?
+    usage_reason: Optional[str] = None  # Why LLM used this source
+    source_number: Optional[int] = None  # Original retrieval order (1-20)
+    
     # Optional fields
     ragie_chunk_id: Optional[str] = None
     source_metadata: Optional[Dict[str, Any]] = None

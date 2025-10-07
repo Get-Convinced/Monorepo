@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class RedisService:
     """Redis service for caching and temporary storage."""
     
-    def __init__(self, redis_url: str = "redis://localhost:6380"):
+    def __init__(self, redis_url: str = "redis://localhost:6379"):
         """Initialize Redis service."""
         self.redis_url = redis_url
         self._client: Optional[redis.Redis] = None

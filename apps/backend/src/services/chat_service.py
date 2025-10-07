@@ -254,11 +254,22 @@ class ChatService:
                 }
             )
             
-            # 3. Retrieve from Ragie
+            # 3. Retrieve from Ragie with enhanced features
+            # Detect if query is time-sensitive
+            is_time_sensitive = any(word in question.lower() for word in [
+                "latest", "recent", "new", "update", "current", "today", "yesterday",
+                "this week", "this month", "now", "2025", "2024"
+            ])
+            
             retrieval_result = await self.ragie_service.retrieve_chunks(
                 query=question,
                 organization_id=organization_id,
-                max_chunks=15
+                max_chunks=20,  # Increased from 15 for better coverage
+                rerank=True,  # Enable reranking for better relevance
+                recency_bias=is_time_sensitive,  # Favor recent docs for time-sensitive queries
+                max_chunks_per_document=5,  # Ensure diversity across documents
+                min_score=0.5,  # Filter low-quality chunks
+                use_cache=True  # Cache for 5 minutes
             )
             
             # Build sources directly from scored_chunks (no extra GETs)
@@ -285,14 +296,22 @@ class ChatService:
                 for msg in reversed(history_messages)
             ]
             
-            # 5. Generate LLM response
-            llm_result = await self.llm_service.generate_response(
+            # 5. Generate LLM response with source tracking
+            llm_result = await self.llm_service.generate_response_with_sources(
                 question=question,
                 chunks=chunks_with_names,
                 mode=mode,
                 model=model,
                 conversation_history=conversation_history
             )
+            
+            # Parse sources_used from LLM
+            sources_used_map = {}  # source_num -> reason
+            for source_info in llm_result.get("sources_used", []):
+                source_num = source_info.get("source_num")
+                reason = source_info.get("reason", "")
+                if source_num and 1 <= source_num <= len(chunks_with_names):
+                    sources_used_map[source_num] = reason
             
             # 6. Save AI message
             ai_message = DBChatMessage(
@@ -312,9 +331,13 @@ class ChatService:
             await self.session.commit()
             await self.session.refresh(ai_message)
             
-            # 7. Save sources
+            # 7. Save sources with usage tracking
             sources = []
-            for chunk in chunks_with_names:
+            for idx, chunk in enumerate(chunks_with_names, 1):
+                source_num = idx
+                is_used = source_num in sources_used_map
+                usage_reason = sources_used_map.get(source_num)
+                
                 db_source = DBChatSource(
                     id=uuid.uuid4(),
                     message_id=ai_message.id,
@@ -323,12 +346,24 @@ class ChatService:
                     document_name=chunk["document_name"],
                     page_number=chunk.get("page_number"),
                     chunk_text=chunk["text"][:500] if chunk["text"] else None,  # First 500 chars
-                    relevance_score=chunk["score"]
+                    relevance_score=chunk["score"],
+                    is_used=is_used,  # NEW: Track if LLM used this source
+                    usage_reason=usage_reason,  # NEW: Why LLM used it
+                    source_number=source_num  # NEW: Original retrieval order
                 )
                 self.session.add(db_source)
                 sources.append(self._db_source_to_pydantic(db_source))
             
             await self.session.commit()
+            
+            logger.info(
+                "Sources saved with usage tracking",
+                extra={
+                    "total_sources": len(sources),
+                    "used_sources": len(sources_used_map),
+                    "used_function_calling": llm_result.get("used_function_calling", False)
+                }
+            )
             
             # 8. Update session
             await self._update_session_after_message(session_id, question)
@@ -543,6 +578,9 @@ class ChatService:
             page_number=db_source.page_number,
             chunk_text=db_source.chunk_text or "",
             relevance_score=db_source.relevance_score or 0.0,
+            is_used=db_source.is_used if hasattr(db_source, 'is_used') else False,  # NEW
+            usage_reason=db_source.usage_reason if hasattr(db_source, 'usage_reason') else None,  # NEW
+            source_number=db_source.source_number if hasattr(db_source, 'source_number') else None,  # NEW
             ragie_chunk_id=db_source.ragie_chunk_id,
             source_metadata=db_source.source_metadata,
             created_at=db_source.created_at

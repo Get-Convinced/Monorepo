@@ -20,6 +20,10 @@ export interface ChatSource {
     page_number?: number;
     chunk_text: string;
     relevance_score: number;
+    // Source usage tracking (NEW)
+    is_used?: boolean;
+    usage_reason?: string;
+    source_number?: number;
 }
 
 export interface ChatMessage {
