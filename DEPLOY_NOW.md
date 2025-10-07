@@ -50,7 +50,8 @@ chmod +x migrate_production.sh
   - Run: `aws sts get-caller-identity --profile get-convinced`
   - Should show Account: 362479991031
 - Access to AWS Secrets Manager
-- `jq` installed (`brew install jq` on macOS)
+- **Network Access**: Your IP must be allowed in RDS security group
+  - If connection fails, add your IP to the security group in AWS Console
 
 **Using a different AWS profile?**
 ```bash

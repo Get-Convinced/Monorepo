@@ -39,28 +39,22 @@ get_db_url_from_secrets() {
     
     echo "   Secret ARN: $SECRET_ARN"
     
-    # Fetch secret from AWS
-    SECRET_JSON=$(aws secretsmanager get-secret-value \
+    # Fetch secret from AWS (it's stored as a complete DATABASE_URL, not JSON)
+    SECRET_VALUE=$(aws secretsmanager get-secret-value \
         --profile "$AWS_PROFILE" \
         --secret-id "$SECRET_ARN" \
         --query SecretString \
         --output text 2>/dev/null)
     
-    if [ -z "$SECRET_JSON" ]; then
+    if [ -z "$SECRET_VALUE" ]; then
         echo "⚠️  Could not fetch secret from AWS"
         return 1
     fi
     
-    # Parse JSON to get credentials
-    DB_USERNAME=$(echo "$SECRET_JSON" | jq -r .username)
-    DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
-    DB_ENDPOINT=$(terraform output -raw database_endpoint 2>/dev/null)
-    DB_NAME=$(terraform output -raw database_name 2>/dev/null)
-    
     cd - > /dev/null
     
-    # Construct DATABASE_URL (endpoint already includes :5432)
-    export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_ENDPOINT}/${DB_NAME}"
+    # The secret is already the complete DATABASE_URL
+    export DATABASE_URL="$SECRET_VALUE"
     
     echo "✅ Database URL fetched successfully"
     return 0
