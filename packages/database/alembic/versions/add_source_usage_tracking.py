@@ -1,7 +1,7 @@
 """Add source usage tracking fields
 
 Revision ID: add_source_usage_tracking
-Revises: (will be auto-generated)
+Revises: 003
 Create Date: 2025-01-07
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_source_usage_tracking'
-down_revision = None  # Will be set by alembic
+down_revision = '003'  # Depends on chat tables migration
 branch_labels = None
 depends_on = None
 
