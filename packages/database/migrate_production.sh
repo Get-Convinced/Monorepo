@@ -5,6 +5,9 @@
 
 set -e  # Exit on error
 
+# AWS Profile Configuration
+AWS_PROFILE="${AWS_PROFILE:-get-convinced}"
+
 echo "🗄️  Production Database Migration"
 echo "=================================="
 echo ""
@@ -17,19 +20,80 @@ echo "  - Add 'source_number' column (INTEGER, nullable)"
 echo ""
 echo "To chat_sources table"
 echo ""
+echo "🔐 Using AWS Profile: $AWS_PROFILE"
+echo ""
 
-# Check if DATABASE_URL is set
+# Function to get database URL from AWS Secrets Manager
+get_db_url_from_secrets() {
+    echo "🔐 Fetching database credentials from AWS Secrets Manager..."
+    
+    # Get secret ARN from Terraform
+    cd ../../infra
+    export AWS_PROFILE="$AWS_PROFILE"
+    SECRET_ARN=$(terraform output -raw database_secret_arn 2>/dev/null)
+    
+    if [ -z "$SECRET_ARN" ]; then
+        echo "⚠️  Could not get secret ARN from Terraform"
+        return 1
+    fi
+    
+    echo "   Secret ARN: $SECRET_ARN"
+    
+    # Fetch secret from AWS
+    SECRET_JSON=$(aws secretsmanager get-secret-value \
+        --profile "$AWS_PROFILE" \
+        --secret-id "$SECRET_ARN" \
+        --query SecretString \
+        --output text 2>/dev/null)
+    
+    if [ -z "$SECRET_JSON" ]; then
+        echo "⚠️  Could not fetch secret from AWS"
+        return 1
+    fi
+    
+    # Parse JSON to get credentials
+    DB_USERNAME=$(echo "$SECRET_JSON" | jq -r .username)
+    DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
+    DB_HOST=$(terraform output -raw database_endpoint 2>/dev/null)
+    DB_PORT=$(terraform output -raw database_port 2>/dev/null)
+    DB_NAME=$(terraform output -raw database_name 2>/dev/null)
+    
+    cd - > /dev/null
+    
+    # Construct DATABASE_URL
+    export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    
+    echo "✅ Database URL fetched successfully"
+    return 0
+}
+
+# Try to get DATABASE_URL automatically
 if [ -z "$DATABASE_URL" ]; then
-    echo "❌ ERROR: DATABASE_URL environment variable is not set"
+    echo "📋 DATABASE_URL not set, attempting to fetch automatically..."
     echo ""
-    echo "Please set it first:"
-    echo "  export DATABASE_URL='postgresql://user:pass@host:port/dbname'"
+    
+    # Try AWS Secrets Manager first
+    if get_db_url_from_secrets; then
+        echo ""
+    else
+        echo ""
+        echo "❌ Could not automatically fetch database credentials"
+        echo ""
+        echo "Please set DATABASE_URL manually:"
+        echo "  export DATABASE_URL='postgresql://user:pass@host:port/dbname'"
+        echo ""
+        echo "You can get it from:"
+        echo "  1. AWS Secrets Manager:"
+        echo "     aws secretsmanager get-secret-value --secret-id <arn>"
+        echo ""
+        echo "  2. Or use this command:"
+        echo "     cd infra && terraform output -raw database_endpoint"
+        echo ""
+        exit 1
+    fi
+else
+    echo "✅ Using provided DATABASE_URL"
     echo ""
-    echo "You can find the DATABASE_URL from:"
-    echo "  - AWS RDS Console"
-    echo "  - Terraform outputs: terraform output database_url"
-    echo "  - AWS Secrets Manager"
-    exit 1
 fi
 
 echo "✅ DATABASE_URL is set"

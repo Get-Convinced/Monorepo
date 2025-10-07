@@ -26,33 +26,49 @@ Your backend will automatically redeploy from the main branch push:
 ### **Step 1: Run Database Migration** ⚠️ REQUIRED
 
 ```bash
-# Get your production DATABASE_URL
-# Option A: From AWS Console
-#   - Go to RDS > Databases > Your DB > Connectivity & security
-#   - Connection string format: postgresql://user:pass@host:port/dbname
-
-# Option B: From Terraform
-cd infra
-terraform output database_url
-
-# Option C: From AWS Secrets Manager
-aws secretsmanager get-secret-value --secret-id prod/database/url
-
-# Set the DATABASE_URL
-export DATABASE_URL="postgresql://user:pass@host:port/dbname"
-
 # Navigate to database package
 cd packages/database
 
-# Run the migration script (it has safety checks!)
+# Make script executable (first time only)
+chmod +x migrate_production.sh
+
+# Run the migration script - IT WILL AUTO-FETCH DATABASE_URL! 🎉
 ./migrate_production.sh
 
-# The script will:
-# 1. ✅ Check connection
-# 2. ⚠️  Ask for backup confirmation
-# 3. 📋 Show preview of changes
-# 4. 🚀 Run migration
-# 5. ✅ Verify success
+# The script will automatically:
+# 1. 🔐 Fetch credentials from AWS Secrets Manager (via Terraform)
+# 2. 🔗 Construct DATABASE_URL
+# 3. ✅ Check connection
+# 4. ⚠️  Ask for backup confirmation
+# 5. 📋 Show preview of changes
+# 6. 🚀 Run migration
+# 7. ✅ Verify success
+```
+
+**Requirements:**
+- AWS CLI configured with `get-convinced` profile
+  - Run: `aws sts get-caller-identity --profile get-convinced`
+  - Should show Account: 362479991031
+- Access to AWS Secrets Manager
+- `jq` installed (`brew install jq` on macOS)
+
+**Using a different AWS profile?**
+```bash
+AWS_PROFILE=your-profile-name ./migrate_production.sh
+```
+
+**Manual Override (if auto-fetch fails):**
+```bash
+# Fetch secret manually
+cd ../../infra
+export AWS_PROFILE=get-convinced
+SECRET_ARN=$(terraform output -raw database_secret_arn)
+aws secretsmanager get-secret-value --profile get-convinced --secret-id $SECRET_ARN
+
+# Set DATABASE_URL manually
+export DATABASE_URL="postgresql://user:pass@host:port/ai_knowledge_agent"
+cd ../packages/database
+./migrate_production.sh
 ```
 
 ### **Step 2: Verify Backend Deployment**
