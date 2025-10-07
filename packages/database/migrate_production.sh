@@ -54,14 +54,13 @@ get_db_url_from_secrets() {
     # Parse JSON to get credentials
     DB_USERNAME=$(echo "$SECRET_JSON" | jq -r .username)
     DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r .password)
-    DB_HOST=$(terraform output -raw database_endpoint 2>/dev/null)
-    DB_PORT=$(terraform output -raw database_port 2>/dev/null)
+    DB_ENDPOINT=$(terraform output -raw database_endpoint 2>/dev/null)
     DB_NAME=$(terraform output -raw database_name 2>/dev/null)
     
     cd - > /dev/null
     
-    # Construct DATABASE_URL
-    export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    # Construct DATABASE_URL (endpoint already includes :5432)
+    export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_ENDPOINT}/${DB_NAME}"
     
     echo "✅ Database URL fetched successfully"
     return 0
