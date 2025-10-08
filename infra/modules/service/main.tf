@@ -92,7 +92,7 @@ resource "aws_ecs_task_definition" "backend" {
       cpu       = 256
       memory    = 512
       command   = ["uv", "run", "python", "-m", "alembic", "upgrade", "head"]
-      workingDirectory = "/app/packages/database"
+      workingDirectory = "/workspace/packages/database"
       environment = [
         {
           name  = "NODE_ENV"
