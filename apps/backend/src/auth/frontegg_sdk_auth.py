@@ -34,7 +34,9 @@ class FronteggSDKAuth:
     
     def __init__(self):
         # Use FRONTEGG_BASE_URL as the issuer (where the app is hosted)
-        self.issuer = os.getenv("FRONTEGG_BASE_URL", "https://app-griklxnnsxag.frontegg.com")
+        # Strip trailing slash to match JWT issuer format
+        base_url = os.getenv("FRONTEGG_BASE_URL", "https://app-griklxnnsxag.frontegg.com")
+        self.issuer = base_url.rstrip('/')
         self.audience = os.getenv("FRONTEGG_CLIENT_ID")  # Client ID is the audience
         self.enabled = bool(self.issuer and self.audience)
         
@@ -43,6 +45,8 @@ class FronteggSDKAuth:
         
         if not self.audience:
             logger.warning("FRONTEGG_CLIENT_ID not set - authentication disabled for development")
+        else:
+            logger.info(f"Frontegg auth initialized with issuer: {self.issuer}, audience: {self.audience}")
         
         if self.enabled:
             self._init_jwks_client()
@@ -136,10 +140,18 @@ class FronteggSDKAuth:
             return user_info
             
         except InvalidTokenError as e:
-            logger.error(f"Invalid JWT token: {e}")
+            error_msg = str(e)
+            logger.error(f"Invalid JWT token: {error_msg}")
+            
+            # Add helpful debug info for issuer/audience mismatch
+            if "issuer" in error_msg.lower():
+                logger.error(f"Expected issuer: {self.issuer}, Token was rejected. Check JWT 'iss' claim.")
+            if "audience" in error_msg.lower():
+                logger.error(f"Expected audience: {self.audience}, Token was rejected. Check JWT 'aud' claim.")
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid token: {str(e)}"
+                detail=f"Invalid token: {error_msg}"
             )
         except Exception as e:
             logger.error(f"JWT verification failed: {e}")

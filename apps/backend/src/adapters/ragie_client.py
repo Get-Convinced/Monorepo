@@ -84,6 +84,7 @@ class RagieClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
+        self.logger = logging.getLogger(__name__)
         
         # Create HTTP client with default headers
         self.client = httpx.AsyncClient(

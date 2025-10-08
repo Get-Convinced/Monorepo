@@ -231,6 +231,8 @@ class ChatService:
             ChatServiceError: If processing fails
         """
         try:
+            logger.info(f"🚀 DEBUG: send_message called - session_id={session_id}, user_id={user_id}, org_id={organization_id}, question='{question[:50]}...', mode={mode}, model={model}")
+            
             # 1. Check rate limits
             await self.check_rate_limits(user_id, organization_id)
             
@@ -261,6 +263,8 @@ class ChatService:
                 "this week", "this month", "now", "2025", "2024"
             ])
             
+            logger.info(f"🔍 DEBUG: Calling Ragie with query='{question[:100]}', org={organization_id}, max_chunks=20, rerank=True, recency_bias={is_time_sensitive}, min_score=0.5")
+            
             retrieval_result = await self.ragie_service.retrieve_chunks(
                 query=question,
                 organization_id=organization_id,
@@ -268,9 +272,11 @@ class ChatService:
                 rerank=True,  # Enable reranking for better relevance
                 recency_bias=is_time_sensitive,  # Favor recent docs for time-sensitive queries
                 max_chunks_per_document=5,  # Ensure diversity across documents
-                min_score=0.5,  # Filter low-quality chunks
+                min_score=0.01,  # Lower threshold to include more chunks (was 0.5)
                 use_cache=True  # Cache for 5 minutes
             )
+            
+            logger.info(f"📦 DEBUG: Ragie returned {len(retrieval_result.scored_chunks)} chunks, total in response: {len(retrieval_result.scored_chunks)}")
             
             # Build sources directly from scored_chunks (no extra GETs)
             chunks_with_names = []
@@ -284,6 +290,8 @@ class ChatService:
                     "chunk_id": chunk.id
                 })
             
+            logger.info(f"📚 DEBUG: Built {len(chunks_with_names)} chunks for LLM - scores: {[c['score'] for c in chunks_with_names[:5]]}")
+            
             # 4. Get conversation history
             history_query = select(DBChatMessage).where(
                 DBChatMessage.session_id == uuid.UUID(session_id)
@@ -296,6 +304,8 @@ class ChatService:
                 for msg in reversed(history_messages)
             ]
             
+            logger.info(f"💬 DEBUG: Calling LLM with {len(chunks_with_names)} chunks, mode={mode}, model={model}, history_length={len(conversation_history)}")
+            
             # 5. Generate LLM response with source tracking
             llm_result = await self.llm_service.generate_response_with_sources(
                 question=question,
@@ -305,6 +315,8 @@ class ChatService:
                 conversation_history=conversation_history
             )
             
+            logger.info(f"🤖 DEBUG: LLM returned content_length={len(llm_result['content'])}, sources_used={len(llm_result.get('sources_used', []))}, tokens={llm_result['tokens_total']}")
+            
             # Parse sources_used from LLM
             sources_used_map = {}  # source_num -> reason
             for source_info in llm_result.get("sources_used", []):
@@ -312,6 +324,8 @@ class ChatService:
                 reason = source_info.get("reason", "")
                 if source_num and 1 <= source_num <= len(chunks_with_names):
                     sources_used_map[source_num] = reason
+            
+            logger.info(f"📌 DEBUG: Parsed sources_used_map with {len(sources_used_map)} used sources: {list(sources_used_map.keys())}")
             
             # 6. Save AI message
             ai_message = DBChatMessage(
@@ -377,7 +391,10 @@ class ChatService:
                 }
             )
             
-            return self._db_message_to_pydantic(ai_message, sources)
+            final_message = self._db_message_to_pydantic(ai_message, sources)
+            logger.info(f"✅ DEBUG: Returning to frontend - message_id={final_message.id}, sources_count={len(sources)}, used_sources={sum(1 for s in sources if s.is_used)}")
+            
+            return final_message
             
         except RateLimitExceededError:
             raise

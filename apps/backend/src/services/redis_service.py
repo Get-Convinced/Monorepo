@@ -18,7 +18,7 @@ class RedisService:
     """Redis service for caching and temporary storage."""
     
     def __init__(self, redis_url: str = "redis://localhost:6379"):
-        """Initialize Redis service."""
+        """Initialize Redis service. Default port 6379 (standard Redis port)."""
         self.redis_url = redis_url
         self._client: Optional[redis.Redis] = None
     

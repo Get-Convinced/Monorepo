@@ -486,7 +486,7 @@ class RagieService:
                 
                 # Try cache first
                 try:
-                    cached = await self.redis_service.get(cache_key)
+                    cached = await self.redis_service.get_cache(cache_key)
                     if cached:
                         logger.info("Cache hit for retrieval", extra={"cache_key": cache_key})
                         return RagieRetrievalResult(**cached)
@@ -520,7 +520,7 @@ class RagieService:
             if use_cache and cache_key and self.redis_service:
                 try:
                     # Cache for 5 minutes
-                    await self.redis_service.set(
+                    await self.redis_service.set_cache(
                         cache_key, 
                         result.model_dump(),
                         ttl_seconds=300
