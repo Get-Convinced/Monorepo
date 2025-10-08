@@ -54,16 +54,18 @@ class RagieService:
     # Maximum file size (50MB)
     MAX_FILE_SIZE = 50 * 1024 * 1024
     
-    def __init__(self, ragie_client: RagieClient, ragie_s3_service: Optional[S3Service] = None):
+    def __init__(self, ragie_client: RagieClient, ragie_s3_service: Optional[S3Service] = None, redis_service=None):
         """
         Initialize the Ragie service.
         
         Args:
             ragie_client: Configured Ragie API client
             ragie_s3_service: Optional S3 service for URL-based uploads
+            redis_service: Optional Redis service for caching
         """
         self.ragie_client = ragie_client
         self.ragie_s3_service = ragie_s3_service
+        self.redis_service = redis_service
         self.use_s3_upload = ragie_s3_service is not None
     
     def _validate_file(self, file_content: bytes, filename: str) -> None:

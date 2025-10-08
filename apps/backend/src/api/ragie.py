@@ -90,12 +90,16 @@ def get_ragie_service() -> RagieService:
             logger.info("Initializing Ragie service with S3+URL upload method")
             _ragie_service_instance = RagieService(
                 ragie_client=ragie_client,
-                ragie_s3_service=s3_service
+                ragie_s3_service=s3_service,
+                redis_service=redis_service
             )
         except Exception as e:
             logger.warning(f"Failed to initialize S3 service, falling back to direct upload: {e}")
             logger.info("Initializing Ragie service without S3 (direct upload mode)")
-            _ragie_service_instance = RagieService(ragie_client=ragie_client)
+            _ragie_service_instance = RagieService(
+                ragie_client=ragie_client,
+                redis_service=redis_service
+            )
     
     return _ragie_service_instance
 
